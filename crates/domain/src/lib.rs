@@ -1,14 +1,17 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Core Domain: Tenant & Business.
+//!
+//! Modul ini murni domain logic:
+//! - Tidak bergantung pada framework, database, HTTP, atau UI.
+//! - Semua Value Object memvalidasi dirinya sendiri saat dibuat.
+//! - Business rule lintas-entity (mis. keunikan nama per Tenant) ada di
+//!   modul `rules`, berupa fungsi murni yang menerima data sebagai
+//!   parameter — bukan mengakses database secara langsung.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod business;
+pub mod error;
+pub mod rules;
+pub mod tenant;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use business::{Business, BusinessId, BusinessName, BusinessType};
+pub use error::DomainError;
+pub use tenant::{Tenant, TenantId, TenantName};
