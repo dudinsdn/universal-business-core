@@ -32,6 +32,15 @@ pub fn ensure_tenant_can_be_deleted(active_business_count: usize) -> Result<(), 
     Ok(())
 }
 
+/// Business rule: Business hanya boleh dibuat di bawah Tenant yang masih
+/// aktif (belum di-soft-delete).
+pub fn ensure_tenant_is_active(tenant_is_deleted: bool) -> Result<(), DomainError> {
+    if tenant_is_deleted {
+        return Err(DomainError::TenantIsDeleted);
+    }
+    Ok(())
+}
+
 /// Business rule: Optimistic Locking. Update ditolak jika version yang
 /// dikirim client tidak sama dengan version yang tersimpan di database.
 pub fn ensure_version_matches(expected: u32, actual: u32) -> Result<(), DomainError> {
@@ -92,6 +101,19 @@ mod tests {
     #[test]
     fn allows_tenant_deletion_when_no_active_business() {
         assert_eq!(ensure_tenant_can_be_deleted(0), Ok(()));
+    }
+
+    #[test]
+    fn rejects_business_creation_when_tenant_is_deleted() {
+        assert_eq!(
+            ensure_tenant_is_active(true),
+            Err(DomainError::TenantIsDeleted)
+        );
+    }
+
+    #[test]
+    fn allows_business_creation_when_tenant_is_active() {
+        assert_eq!(ensure_tenant_is_active(false), Ok(()));
     }
 
     #[test]

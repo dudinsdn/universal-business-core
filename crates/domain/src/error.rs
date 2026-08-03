@@ -12,6 +12,7 @@ pub enum DomainError {
     InvalidBusinessType,
     DuplicateBusinessName,
     TenantHasActiveBusiness,
+    TenantIsDeleted,
     VersionConflict,
 }
 
@@ -33,6 +34,10 @@ impl fmt::Display for DomainError {
             DomainError::TenantHasActiveBusiness => write!(
                 f,
                 "tenant tidak bisa dihapus karena masih memiliki business aktif"
+            ),
+            DomainError::TenantIsDeleted => write!(
+                f,
+                "tidak bisa membuat business baru karena tenant sudah dihapus"
             ),
             DomainError::VersionConflict => write!(
                 f,
