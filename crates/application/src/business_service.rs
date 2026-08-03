@@ -19,7 +19,7 @@ impl<R: BusinessRepository> BusinessService<R> {
         Self { repository }
     }
 
-    pub fn create_business(
+    pub async fn create_business(
         &self,
         tenant: &Tenant,
         name: BusinessName,
@@ -27,15 +27,18 @@ impl<R: BusinessRepository> BusinessService<R> {
     ) -> Result<Business, ApplicationError> {
         rules::ensure_tenant_is_active(tenant.is_deleted())?;
 
-        let existing_names = self.repository.find_active_names_by_tenant(tenant.id())?;
+        let existing_names = self
+            .repository
+            .find_active_names_by_tenant(tenant.id())
+            .await?;
         rules::ensure_business_name_unique(&existing_names, &name)?;
 
         let business = Business::new(tenant.id(), name, business_type);
-        self.repository.save(&business)?;
+        self.repository.save(&business).await?;
         Ok(business)
     }
 
-    pub fn rename_business(
+    pub async fn rename_business(
         &self,
         id: BusinessId,
         new_name: BusinessName,
@@ -43,38 +46,41 @@ impl<R: BusinessRepository> BusinessService<R> {
     ) -> Result<Business, ApplicationError> {
         let mut business = self
             .repository
-            .find_by_id(id)?
+            .find_by_id(id)
+            .await?
             .ok_or(ApplicationError::BusinessNotFound)?;
 
         rules::ensure_version_matches(expected_version, business.version())?;
 
         let existing_names: Vec<BusinessName> = self
             .repository
-            .find_active_names_by_tenant(business.tenant_id())?
+            .find_active_names_by_tenant(business.tenant_id())
+            .await?
             .into_iter()
             .filter(|existing| existing != business.name())
             .collect();
         rules::ensure_business_name_unique(&existing_names, &new_name)?;
 
         business.rename(new_name);
-        self.repository.save(&business)?;
+        self.repository.save(&business).await?;
         Ok(business)
     }
 
-    pub fn delete_business(
+    pub async fn delete_business(
         &self,
         id: BusinessId,
         expected_version: u32,
     ) -> Result<(), ApplicationError> {
         let mut business = self
             .repository
-            .find_by_id(id)?
+            .find_by_id(id)
+            .await?
             .ok_or(ApplicationError::BusinessNotFound)?;
 
         rules::ensure_version_matches(expected_version, business.version())?;
 
         business.soft_delete();
-        self.repository.save(&business)?;
+        self.repository.save(&business).await?;
         Ok(())
     }
 }
@@ -89,8 +95,8 @@ mod tests {
         Tenant::new(TenantName::new("Tenant A").unwrap())
     }
 
-    #[test]
-    fn create_business_succeeds_for_active_tenant() {
+    #[tokio::test]
+    async fn create_business_succeeds_for_active_tenant() {
         let repo = InMemoryBusinessRepository::new();
         let service = BusinessService::new(repo);
         let tenant = active_tenant();
@@ -101,23 +107,26 @@ mod tests {
                 BusinessName::new("Toko Baju").unwrap(),
                 BusinessType::new("retail").unwrap(),
             )
+            .await
             .unwrap();
 
         assert_eq!(business.tenant_id(), tenant.id());
     }
 
-    #[test]
-    fn create_business_rejects_deleted_tenant() {
+    #[tokio::test]
+    async fn create_business_rejects_deleted_tenant() {
         let repo = InMemoryBusinessRepository::new();
         let service = BusinessService::new(repo);
         let mut tenant = active_tenant();
         tenant.soft_delete();
 
-        let result = service.create_business(
-            &tenant,
-            BusinessName::new("Toko Baju").unwrap(),
-            BusinessType::new("retail").unwrap(),
-        );
+        let result = service
+            .create_business(
+                &tenant,
+                BusinessName::new("Toko Baju").unwrap(),
+                BusinessType::new("retail").unwrap(),
+            )
+            .await;
 
         assert!(matches!(
             result,
@@ -125,8 +134,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn create_business_rejects_duplicate_name_in_same_tenant() {
+    #[tokio::test]
+    async fn create_business_rejects_duplicate_name_in_same_tenant() {
         let repo = InMemoryBusinessRepository::new();
         let service = BusinessService::new(repo);
         let tenant = active_tenant();
@@ -137,13 +146,16 @@ mod tests {
                 BusinessName::new("Toko Baju").unwrap(),
                 BusinessType::new("retail").unwrap(),
             )
+            .await
             .unwrap();
 
-        let result = service.create_business(
-            &tenant,
-            BusinessName::new("Toko Baju").unwrap(),
-            BusinessType::new("retail").unwrap(),
-        );
+        let result = service
+            .create_business(
+                &tenant,
+                BusinessName::new("Toko Baju").unwrap(),
+                BusinessType::new("retail").unwrap(),
+            )
+            .await;
 
         assert!(matches!(
             result,
@@ -151,8 +163,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn create_business_allows_same_name_in_different_tenant() {
+    #[tokio::test]
+    async fn create_business_allows_same_name_in_different_tenant() {
         let repo = InMemoryBusinessRepository::new();
         let service = BusinessService::new(repo);
         let tenant_a = active_tenant();
@@ -164,19 +176,22 @@ mod tests {
                 BusinessName::new("Toko Baju").unwrap(),
                 BusinessType::new("retail").unwrap(),
             )
+            .await
             .unwrap();
 
-        let result = service.create_business(
-            &tenant_b,
-            BusinessName::new("Toko Baju").unwrap(),
-            BusinessType::new("retail").unwrap(),
-        );
+        let result = service
+            .create_business(
+                &tenant_b,
+                BusinessName::new("Toko Baju").unwrap(),
+                BusinessType::new("retail").unwrap(),
+            )
+            .await;
 
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn rename_business_rejects_stale_version() {
+    #[tokio::test]
+    async fn rename_business_rejects_stale_version() {
         let repo = InMemoryBusinessRepository::new();
         let service = BusinessService::new(repo);
         let tenant = active_tenant();
@@ -186,13 +201,16 @@ mod tests {
                 BusinessName::new("Toko Baju").unwrap(),
                 BusinessType::new("retail").unwrap(),
             )
+            .await
             .unwrap();
 
-        let result = service.rename_business(
-            business.id(),
-            BusinessName::new("Toko Baju Baru").unwrap(),
-            business.version() + 1,
-        );
+        let result = service
+            .rename_business(
+                business.id(),
+                BusinessName::new("Toko Baju Baru").unwrap(),
+                business.version() + 1,
+            )
+            .await;
 
         assert!(matches!(
             result,
@@ -200,8 +218,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn delete_business_marks_as_deleted() {
+    #[tokio::test]
+    async fn delete_business_marks_as_deleted() {
         let repo = InMemoryBusinessRepository::new();
         let service = BusinessService::new(repo);
         let tenant = active_tenant();
@@ -211,15 +229,18 @@ mod tests {
                 BusinessName::new("Toko Baju").unwrap(),
                 BusinessType::new("retail").unwrap(),
             )
+            .await
             .unwrap();
 
         service
             .delete_business(business.id(), business.version())
+            .await
             .unwrap();
 
         let stored = service
             .repository
             .find_by_id(business.id())
+            .await
             .unwrap()
             .unwrap();
         assert!(stored.is_deleted());

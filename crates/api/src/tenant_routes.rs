@@ -15,7 +15,7 @@ pub async fn create_tenant(
     Json(payload): Json<CreateTenantRequest>,
 ) -> Result<(StatusCode, Json<TenantResponse>), ApiError> {
     let name = TenantName::new(payload.name).map_err(application::ApplicationError::from)?;
-    let tenant = state.tenant_service.create_tenant(name)?;
+    let tenant = state.tenant_service.create_tenant(name).await?;
     Ok((StatusCode::CREATED, Json(TenantResponse::from(&tenant))))
 }
 
@@ -24,7 +24,7 @@ pub async fn get_tenant(
     Path(id): Path<String>,
 ) -> Result<Json<TenantResponse>, ApiError> {
     let id: TenantId = id.parse().map_err(application::ApplicationError::from)?;
-    let tenant = state.tenant_service.get_tenant(id)?;
+    let tenant = state.tenant_service.get_tenant(id).await?;
     Ok(Json(TenantResponse::from(&tenant)))
 }
 
@@ -37,7 +37,8 @@ pub async fn rename_tenant(
     let name = TenantName::new(payload.name).map_err(application::ApplicationError::from)?;
     let tenant = state
         .tenant_service
-        .rename_tenant(id, name, payload.expected_version)?;
+        .rename_tenant(id, name, payload.expected_version)
+        .await?;
     Ok(Json(TenantResponse::from(&tenant)))
 }
 
@@ -53,6 +54,7 @@ pub async fn delete_tenant(
     let id: TenantId = id.parse().map_err(application::ApplicationError::from)?;
     state
         .tenant_service
-        .delete_tenant(id, &state.business_repository)?;
+        .delete_tenant(id, &state.business_repository)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }

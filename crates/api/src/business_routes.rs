@@ -18,7 +18,7 @@ pub async fn create_business(
     let tenant_id: TenantId = tenant_id
         .parse()
         .map_err(application::ApplicationError::from)?;
-    let tenant = state.tenant_service.get_tenant(tenant_id)?;
+    let tenant = state.tenant_service.get_tenant(tenant_id).await?;
 
     let name = BusinessName::new(payload.name).map_err(application::ApplicationError::from)?;
     let business_type =
@@ -26,7 +26,8 @@ pub async fn create_business(
 
     let business = state
         .business_service
-        .create_business(&tenant, name, business_type)?;
+        .create_business(&tenant, name, business_type)
+        .await?;
     Ok((StatusCode::CREATED, Json(BusinessResponse::from(&business))))
 }
 
@@ -39,7 +40,8 @@ pub async fn rename_business(
     let name = BusinessName::new(payload.name).map_err(application::ApplicationError::from)?;
     let business = state
         .business_service
-        .rename_business(id, name, payload.expected_version)?;
+        .rename_business(id, name, payload.expected_version)
+        .await?;
     Ok(Json(BusinessResponse::from(&business)))
 }
 
@@ -51,6 +53,7 @@ pub async fn delete_business(
     let id: BusinessId = id.parse().map_err(application::ApplicationError::from)?;
     state
         .business_service
-        .delete_business(id, payload.expected_version)?;
+        .delete_business(id, payload.expected_version)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }

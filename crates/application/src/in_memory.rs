@@ -32,7 +32,7 @@ impl InMemoryTenantRepository {
 }
 
 impl TenantRepository for InMemoryTenantRepository {
-    fn find_by_id(&self, id: TenantId) -> Result<Option<Tenant>, RepositoryError> {
+    async fn find_by_id(&self, id: TenantId) -> Result<Option<Tenant>, RepositoryError> {
         let data = self
             .data
             .lock()
@@ -40,7 +40,7 @@ impl TenantRepository for InMemoryTenantRepository {
         Ok(data.get(&id).cloned())
     }
 
-    fn save(&self, tenant: &Tenant) -> Result<(), RepositoryError> {
+    async fn save(&self, tenant: &Tenant) -> Result<(), RepositoryError> {
         let mut data = self
             .data
             .lock()
@@ -62,7 +62,7 @@ impl InMemoryBusinessRepository {
 }
 
 impl BusinessRepository for InMemoryBusinessRepository {
-    fn find_by_id(&self, id: BusinessId) -> Result<Option<Business>, RepositoryError> {
+    async fn find_by_id(&self, id: BusinessId) -> Result<Option<Business>, RepositoryError> {
         let data = self
             .data
             .lock()
@@ -70,7 +70,7 @@ impl BusinessRepository for InMemoryBusinessRepository {
         Ok(data.get(&id).cloned())
     }
 
-    fn find_active_names_by_tenant(
+    async fn find_active_names_by_tenant(
         &self,
         tenant_id: TenantId,
     ) -> Result<Vec<BusinessName>, RepositoryError> {
@@ -85,7 +85,7 @@ impl BusinessRepository for InMemoryBusinessRepository {
             .collect())
     }
 
-    fn count_active_by_tenant(&self, tenant_id: TenantId) -> Result<usize, RepositoryError> {
+    async fn count_active_by_tenant(&self, tenant_id: TenantId) -> Result<usize, RepositoryError> {
         let data = self
             .data
             .lock()
@@ -96,7 +96,7 @@ impl BusinessRepository for InMemoryBusinessRepository {
             .count())
     }
 
-    fn save(&self, business: &Business) -> Result<(), RepositoryError> {
+    async fn save(&self, business: &Business) -> Result<(), RepositoryError> {
         let mut data = self
             .data
             .lock()
