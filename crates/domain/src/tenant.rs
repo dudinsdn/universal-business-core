@@ -95,6 +95,28 @@ impl Tenant {
         self.id
     }
 
+    /// Merekonstruksi Tenant dari data yang SUDAH tersimpan (mis. satu baris
+    /// hasil query database). Berbeda dari `Tenant::new` yang selalu
+    /// membuat identitas & timestamp baru — dipakai HANYA oleh implementasi
+    /// Repository konkret saat memuat entity yang sudah ada.
+    pub fn from_persisted(
+        id: TenantId,
+        name: TenantName,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        deleted_at: Option<DateTime<Utc>>,
+        version: u32,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            created_at,
+            updated_at,
+            deleted_at,
+            version,
+        }
+    }
+
     pub fn name(&self) -> &TenantName {
         &self.name
     }
@@ -200,5 +222,20 @@ mod tests {
         tenant.soft_delete();
         assert!(tenant.is_deleted());
         assert_eq!(tenant.version(), 1);
+    }
+
+    #[test]
+    fn from_persisted_reconstructs_exact_state() {
+        let id = TenantId::new();
+        let name = TenantName::new("Tenant A").unwrap();
+        let created_at = Utc::now();
+        let updated_at = created_at;
+
+        let tenant = Tenant::from_persisted(id, name.clone(), created_at, updated_at, None, 3);
+
+        assert_eq!(tenant.id(), id);
+        assert_eq!(tenant.name(), &name);
+        assert_eq!(tenant.version(), 3);
+        assert!(!tenant.is_deleted());
     }
 }

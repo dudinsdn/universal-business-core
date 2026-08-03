@@ -128,6 +128,30 @@ impl Business {
         self.id
     }
 
+    /// Merekonstruksi Business dari data yang SUDAH tersimpan. Lihat
+    /// `Tenant::from_persisted` untuk alasan yang sama.
+    pub fn from_persisted(
+        id: BusinessId,
+        tenant_id: TenantId,
+        name: BusinessName,
+        business_type: BusinessType,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        deleted_at: Option<DateTime<Utc>>,
+        version: u32,
+    ) -> Self {
+        Self {
+            id,
+            tenant_id,
+            name,
+            business_type,
+            created_at,
+            updated_at,
+            deleted_at,
+            version,
+        }
+    }
+
     pub fn tenant_id(&self) -> TenantId {
         self.tenant_id
     }
@@ -235,5 +259,31 @@ mod tests {
         assert_eq!(business.tenant_id(), tenant_id);
         assert_eq!(business.version(), 0);
         assert!(!business.is_deleted());
+    }
+
+    #[test]
+    fn from_persisted_reconstructs_exact_state() {
+        let id = BusinessId::new();
+        let tenant_id = sample_tenant_id();
+        let name = BusinessName::new("Toko Baju").unwrap();
+        let business_type = BusinessType::new("retail").unwrap();
+        let created_at = Utc::now();
+
+        let business = Business::from_persisted(
+            id,
+            tenant_id,
+            name.clone(),
+            business_type.clone(),
+            created_at,
+            created_at,
+            None,
+            5,
+        );
+
+        assert_eq!(business.id(), id);
+        assert_eq!(business.tenant_id(), tenant_id);
+        assert_eq!(business.name(), &name);
+        assert_eq!(business.business_type(), &business_type);
+        assert_eq!(business.version(), 5);
     }
 }
