@@ -9,6 +9,7 @@ use crate::repository::BusinessRepository;
 /// `TenantRepository` — `tenant` yang sudah diambil pemanggil dikirim
 /// sebagai parameter. Ini menjaga service tetap fokus pada satu aggregate
 /// dan mudah diuji, konsisten dengan pola `delete_tenant` di `TenantService`.
+#[derive(Clone)]
 pub struct BusinessService<R: BusinessRepository> {
     repository: R,
 }
@@ -81,7 +82,7 @@ impl<R: BusinessRepository> BusinessService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::InMemoryBusinessRepository;
+    use crate::in_memory::InMemoryBusinessRepository;
     use domain::{DomainError, TenantName};
 
     fn active_tenant() -> Tenant {

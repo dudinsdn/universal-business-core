@@ -5,6 +5,7 @@ use crate::repository::{BusinessRepository, TenantRepository};
 
 /// Orkestrasi use-case seputar Tenant: ambil data lewat Repository,
 /// validasi lewat business rule domain, lalu simpan lewat Repository.
+#[derive(Clone)]
 pub struct TenantService<R: TenantRepository> {
     repository: R,
 }
@@ -18,6 +19,15 @@ impl<R: TenantRepository> TenantService<R> {
         let tenant = Tenant::new(name);
         self.repository.save(&tenant)?;
         Ok(tenant)
+    }
+
+    /// Mengambil satu Tenant berdasarkan id. Dibutuhkan pemanggil (mis. API)
+    /// yang perlu objek `Tenant` utuh sebelum memanggil use-case lain, mis.
+    /// `BusinessService::create_business` yang menerima `&Tenant`.
+    pub fn get_tenant(&self, id: TenantId) -> Result<Tenant, ApplicationError> {
+        self.repository
+            .find_by_id(id)?
+            .ok_or(ApplicationError::TenantNotFound)
     }
 
     pub fn rename_tenant(
@@ -66,7 +76,7 @@ impl<R: TenantRepository> TenantService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{InMemoryBusinessRepository, InMemoryTenantRepository};
+    use crate::in_memory::{InMemoryBusinessRepository, InMemoryTenantRepository};
     use domain::{Business, BusinessName, BusinessType, DomainError};
 
     #[test]
@@ -79,6 +89,29 @@ mod tests {
             .unwrap();
 
         assert_eq!(tenant.version(), 0);
+    }
+
+    #[test]
+    fn get_tenant_returns_saved_tenant() {
+        let repo = InMemoryTenantRepository::new();
+        let service = TenantService::new(repo);
+        let created = service
+            .create_tenant(TenantName::new("Tenant A").unwrap())
+            .unwrap();
+
+        let fetched = service.get_tenant(created.id()).unwrap();
+
+        assert_eq!(fetched.id(), created.id());
+    }
+
+    #[test]
+    fn get_tenant_fails_when_not_found() {
+        let repo = InMemoryTenantRepository::new();
+        let service = TenantService::new(repo);
+
+        let result = service.get_tenant(TenantId::new());
+
+        assert!(matches!(result, Err(ApplicationError::TenantNotFound)));
     }
 
     #[test]

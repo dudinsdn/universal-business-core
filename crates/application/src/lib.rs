@@ -11,13 +11,12 @@
 
 pub mod business_service;
 pub mod error;
+pub mod in_memory;
 pub mod repository;
 pub mod tenant_service;
 
-#[cfg(test)]
-mod test_support;
-
 pub use business_service::BusinessService;
 pub use error::{ApplicationError, RepositoryError};
+pub use in_memory::{InMemoryBusinessRepository, InMemoryTenantRepository};
 pub use repository::{BusinessRepository, TenantRepository};
 pub use tenant_service::TenantService;
