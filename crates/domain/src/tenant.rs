@@ -32,6 +32,16 @@ impl fmt::Display for TenantId {
     }
 }
 
+impl std::str::FromStr for TenantId {
+    type Err = DomainError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s)
+            .map(Self)
+            .map_err(|_| DomainError::InvalidId)
+    }
+}
+
 /// Nama Tenant. Value Object — begitu berhasil dibuat, isinya pasti valid.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TenantName(String);
@@ -130,6 +140,21 @@ impl Tenant {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tenant_id_roundtrips_through_string() {
+        let id = TenantId::new();
+        let parsed: TenantId = id.to_string().parse().unwrap();
+        assert_eq!(id, parsed);
+    }
+
+    #[test]
+    fn tenant_id_rejects_invalid_string() {
+        assert_eq!(
+            "not-a-uuid".parse::<TenantId>(),
+            Err(DomainError::InvalidId)
+        );
+    }
 
     #[test]
     fn tenant_name_rejects_empty_string() {

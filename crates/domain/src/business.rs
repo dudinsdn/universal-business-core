@@ -30,6 +30,16 @@ impl fmt::Display for BusinessId {
     }
 }
 
+impl std::str::FromStr for BusinessId {
+    type Err = DomainError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s)
+            .map(Self)
+            .map_err(|_| DomainError::InvalidId)
+    }
+}
+
 /// Nama tampilan Business. Keunikan nama per Tenant TIDAK dicek di sini —
 /// lihat `rules::ensure_business_name_unique`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -160,6 +170,21 @@ mod tests {
 
     fn sample_tenant_id() -> TenantId {
         TenantId::new()
+    }
+
+    #[test]
+    fn business_id_roundtrips_through_string() {
+        let id = BusinessId::new();
+        let parsed: BusinessId = id.to_string().parse().unwrap();
+        assert_eq!(id, parsed);
+    }
+
+    #[test]
+    fn business_id_rejects_invalid_string() {
+        assert_eq!(
+            "not-a-uuid".parse::<BusinessId>(),
+            Err(DomainError::InvalidId)
+        );
     }
 
     #[test]

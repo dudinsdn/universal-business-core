@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Diagram Proyek UBC</title>
+    <style>
+      .mermaid,
+      .mermaid * {
+        font-family: "ComicShannsMono Nerd Font", monospace !important;
+      }
+    </style>
+  </head>
+    <!-- prettier-ignore -->
+    <div class="mermaid">
+      graph TD
+          classDef default font-family:'ComicShannsMono Nerd Font', monospace;
+          
+          Client(Request / Client)
+          
+          subgraph api[Crate: api]
+              state_rs("state.rs (Pengelola State)")
+          end
+      
+          subgraph application[Crate: application]
+              direction TB
+              tenant_service("tenant_service.rs (Layanan Tenant)")
+              business_service("business_service.rs (Layanan Business)")
+              repository("repository.rs (Antarmuka Penyimpanan)")
+              in_memory("in_memory.rs (Implementasi Sementara)")
+          end
+      
+          subgraph domain[Crate: domain]
+              direction TB
+              tenant("tenant.rs (Entitas Tenant)")
+              business("business.rs (Entitas Business)")
+              rules("rules.rs (Aturan Bisnis Inti)")
+          end
+      
+          Client -->|Mengirim| state_rs
+          state_rs -->|Memanggil| tenant_service
+          state_rs -->|Memanggil| business_service
+      
+          tenant_service -->|Gunakan| tenant
+          tenant_service -->|Validasi| rules
+          tenant_service -->|Akses Data| repository
+          
+          business_service -->|Gunakan| business
+          business_service -->|Validasi| rules
+          business_service -->|Akses Data| repository
+      
+          repository -.->|Implementasi| in_memory
+    </div>
+
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+
+      mermaid.initialize({
+        startOnLoad: true,
+        look: "handDrawn",
+        themeCSS:
+          ".edgeLabel, .edgeLabel span, .label { font-family: 'ComicShannsMono Nerd Font', monospace !important; }",
+      });
+    </script>
+  </body>
+</html>

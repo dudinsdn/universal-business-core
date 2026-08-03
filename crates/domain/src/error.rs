@@ -14,6 +14,7 @@ pub enum DomainError {
     TenantHasActiveBusiness,
     TenantIsDeleted,
     VersionConflict,
+    InvalidId,
 }
 
 impl fmt::Display for DomainError {
@@ -43,6 +44,7 @@ impl fmt::Display for DomainError {
                 f,
                 "versi data tidak sesuai, kemungkinan data sudah diubah pihak lain"
             ),
+            DomainError::InvalidId => write!(f, "format id tidak valid"),
         }
     }
 }
