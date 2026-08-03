@@ -90,6 +90,21 @@ impl BusinessType {
     }
 }
 
+/// Data mentah untuk merekonstruksi Business dari penyimpanan (mis. satu
+/// baris hasil query database). Dikelompokkan jadi satu struct supaya
+/// `from_persisted` tidak melanggar `clippy::too_many_arguments` (>7
+/// parameter) — bukan konsep bisnis, murni pembawa data untuk Repository.
+pub struct PersistedBusiness {
+    pub id: BusinessId,
+    pub tenant_id: TenantId,
+    pub name: BusinessName,
+    pub business_type: BusinessType,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub version: u32,
+}
+
 /// Entity Business: satu bisnis/cabang nyata yang hidup di dalam satu Tenant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Business {
@@ -130,25 +145,16 @@ impl Business {
 
     /// Merekonstruksi Business dari data yang SUDAH tersimpan. Lihat
     /// `Tenant::from_persisted` untuk alasan yang sama.
-    pub fn from_persisted(
-        id: BusinessId,
-        tenant_id: TenantId,
-        name: BusinessName,
-        business_type: BusinessType,
-        created_at: DateTime<Utc>,
-        updated_at: DateTime<Utc>,
-        deleted_at: Option<DateTime<Utc>>,
-        version: u32,
-    ) -> Self {
+    pub fn from_persisted(data: PersistedBusiness) -> Self {
         Self {
-            id,
-            tenant_id,
-            name,
-            business_type,
-            created_at,
-            updated_at,
-            deleted_at,
-            version,
+            id: data.id,
+            tenant_id: data.tenant_id,
+            name: data.name,
+            business_type: data.business_type,
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+            deleted_at: data.deleted_at,
+            version: data.version,
         }
     }
 
@@ -269,16 +275,16 @@ mod tests {
         let business_type = BusinessType::new("retail").unwrap();
         let created_at = Utc::now();
 
-        let business = Business::from_persisted(
+        let business = Business::from_persisted(PersistedBusiness {
             id,
             tenant_id,
-            name.clone(),
-            business_type.clone(),
+            name: name.clone(),
+            business_type: business_type.clone(),
             created_at,
-            created_at,
-            None,
-            5,
-        );
+            updated_at: created_at,
+            deleted_at: None,
+            version: 5,
+        });
 
         assert_eq!(business.id(), id);
         assert_eq!(business.tenant_id(), tenant_id);
