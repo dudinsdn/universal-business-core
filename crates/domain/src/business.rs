@@ -16,6 +16,18 @@ impl BusinessId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
     }
+
+    /// Uuid mentah di baliknya. Dipakai implementasi Repository konkret
+    /// untuk binding parameter query.
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+
+    /// Kebalikan dari `as_uuid`: membangun BusinessId dari Uuid yang sudah
+    /// ada (mis. hasil baca kolom database).
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
 }
 
 impl Default for BusinessId {
@@ -174,6 +186,20 @@ impl Business {
         self.version
     }
 
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+
+    /// Timestamp soft-delete mentah (`None` kalau belum dihapus). Dipakai
+    /// Repository konkret untuk menyimpan nilai aslinya, bukan cuma boolean.
+    pub fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+
     pub fn is_deleted(&self) -> bool {
         self.deleted_at.is_some()
     }
@@ -200,6 +226,13 @@ mod tests {
 
     fn sample_tenant_id() -> TenantId {
         TenantId::new()
+    }
+
+    #[test]
+    fn business_id_roundtrips_through_uuid() {
+        let id = BusinessId::new();
+        let rebuilt = BusinessId::from_uuid(id.as_uuid());
+        assert_eq!(id, rebuilt);
     }
 
     #[test]

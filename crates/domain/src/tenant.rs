@@ -18,6 +18,20 @@ impl TenantId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
     }
+
+    /// Uuid mentah di baliknya. Dipakai implementasi Repository konkret
+    /// (mis. Postgres) untuk binding parameter query — bukan untuk dipakai
+    /// bebas di luar itu.
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+
+    /// Kebalikan dari `as_uuid`: membangun TenantId dari Uuid yang sudah
+    /// ada (mis. hasil baca kolom database). Beda dari `new()` yang selalu
+    /// generate Uuid v7 baru.
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
 }
 
 impl Default for TenantId {
@@ -137,6 +151,12 @@ impl Tenant {
         self.deleted_at.is_some()
     }
 
+    /// Timestamp soft-delete mentah (`None` kalau belum dihapus). Dipakai
+    /// Repository konkret untuk menyimpan nilai aslinya, bukan cuma boolean.
+    pub fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+
     pub fn rename(&mut self, name: TenantName) {
         self.name = name;
         self.touch();
@@ -162,6 +182,13 @@ impl Tenant {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tenant_id_roundtrips_through_uuid() {
+        let id = TenantId::new();
+        let rebuilt = TenantId::from_uuid(id.as_uuid());
+        assert_eq!(id, rebuilt);
+    }
 
     #[test]
     fn tenant_id_roundtrips_through_string() {
