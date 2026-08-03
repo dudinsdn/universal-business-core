@@ -45,6 +45,12 @@ impl TenantRepository for InMemoryTenantRepository {
             .data
             .lock()
             .expect("in-memory repository lock poisoned");
+        if let Some(existing) = data.get(&tenant.id()) {
+            let expected_previous_version = tenant.version().saturating_sub(1);
+            if existing.version() != expected_previous_version {
+                return Err(RepositoryError::VersionConflict);
+            }
+        }
         data.insert(tenant.id(), tenant.clone());
         Ok(())
     }
@@ -101,7 +107,41 @@ impl BusinessRepository for InMemoryBusinessRepository {
             .data
             .lock()
             .expect("in-memory repository lock poisoned");
+        if let Some(existing) = data.get(&business.id()) {
+            let expected_previous_version = business.version().saturating_sub(1);
+            if existing.version() != expected_previous_version {
+                return Err(RepositoryError::VersionConflict);
+            }
+        }
         data.insert(business.id(), business.clone());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use domain::TenantName;
+
+    #[tokio::test]
+    async fn save_detects_concurrent_version_conflict() {
+        let repo = InMemoryTenantRepository::new();
+        let mut tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+        repo.save(&tenant).await.unwrap();
+
+        // Dua "pembaca" sama-sama mulai dari data versi 0.
+        let mut stale_copy = tenant.clone();
+
+        // Salah satu menang duluan: rename, jadi versi 1, berhasil disimpan.
+        tenant.rename(TenantName::new("Tenant A Baru").unwrap());
+        repo.save(&tenant).await.unwrap();
+
+        // Yang satu lagi telat: masih berdasarkan data versi 0, ikut jadi
+        // versi 1 di sisinya sendiri, tapi versi 0 di penyimpanan sudah
+        // tidak ada lagi — harus ditolak sebagai conflict.
+        stale_copy.rename(TenantName::new("Tenant A Telat").unwrap());
+        let result = repo.save(&stale_copy).await;
+
+        assert_eq!(result, Err(RepositoryError::VersionConflict));
     }
 }

@@ -8,6 +8,19 @@ use domain::DomainError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RepositoryError {
     Unavailable(String),
+    /// Update gagal karena versi baris di penyimpanan sudah berubah sejak
+    /// terakhir dibaca (terdeteksi lewat conditional UPDATE ... WHERE
+    /// version = versi_lama, 0 baris ter-update). Beda dari
+    /// `DomainError::VersionConflict` yang mendeteksi versi tidak cocok
+    /// dari INPUT klien — ini terdeteksi di penyimpanan itu sendiri
+    /// (menjaga dari race condition antar-request, bukan cuma klien basi).
+    VersionConflict,
+    /// Constraint UNIQUE di database menolak insert/update (mis. dua
+    /// request nyaris bersamaan lolos pengecekan `ensure_business_name_unique`
+    /// di Application Service — sama seperti VersionConflict, ini
+    /// jaring pengaman di level penyimpanan, bukan pengganti pengecekan
+    /// business rule.
+    UniqueConstraintViolation,
 }
 
 impl fmt::Display for RepositoryError {
@@ -15,6 +28,16 @@ impl fmt::Display for RepositoryError {
         match self {
             RepositoryError::Unavailable(reason) => {
                 write!(f, "penyimpanan data tidak dapat diakses: {reason}")
+            }
+            RepositoryError::VersionConflict => write!(
+                f,
+                "data sudah diubah pihak lain sejak terakhir dibaca (terdeteksi di penyimpanan)"
+            ),
+            RepositoryError::UniqueConstraintViolation => {
+                write!(
+                    f,
+                    "data duplikat ditolak oleh constraint unik di penyimpanan"
+                )
             }
         }
     }
@@ -54,6 +77,18 @@ impl From<DomainError> for ApplicationError {
 
 impl From<RepositoryError> for ApplicationError {
     fn from(err: RepositoryError) -> Self {
-        ApplicationError::Repository(err)
+        match err {
+            // Disatukan dengan DomainError::VersionConflict: dari sudut
+            // pandang pemanggil (API dll), keduanya sama-sama berarti
+            // "coba lagi dengan data terbaru" — sumbernya beda (klien basi
+            // vs race condition di penyimpanan), efeknya sama.
+            RepositoryError::VersionConflict => {
+                ApplicationError::Domain(DomainError::VersionConflict)
+            }
+            RepositoryError::UniqueConstraintViolation => {
+                ApplicationError::Domain(DomainError::DuplicateBusinessName)
+            }
+            other => ApplicationError::Repository(other),
+        }
     }
 }
