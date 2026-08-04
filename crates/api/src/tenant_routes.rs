@@ -19,9 +19,23 @@ where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
 {
+    // Idempotency: kalau client kirim `id` sendiri, dipakai apa adanya
+    // (retry request dengan `id` yang sama tidak akan membuat duplikat —
+    // lihat TenantService::create_tenant). Kalau tidak dikirim, server
+    // generate Id baru seperti sebelumnya.
+    let id = match payload.id {
+        Some(raw) => raw.parse().map_err(application::ApplicationError::from)?,
+        None => TenantId::new(),
+    };
     let name = TenantName::new(payload.name).map_err(application::ApplicationError::from)?;
-    let tenant = state.tenant_service.create_tenant(name).await?;
-    Ok((StatusCode::CREATED, Json(TenantResponse::from(&tenant))))
+
+    let (tenant, created) = state.tenant_service.create_tenant(id, name).await?;
+    let status = if created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
+    Ok((status, Json(TenantResponse::from(&tenant))))
 }
 
 pub async fn get_tenant<TR, BR>(

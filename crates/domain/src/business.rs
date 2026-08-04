@@ -8,7 +8,9 @@ use crate::tenant::TenantId;
 
 const MAX_NAME_LENGTH: usize = 255;
 
-/// Identitas unik Business. Dibuat sistem (UUID v7), bukan auto-increment.
+/// Identitas unik Business. Selalu berupa UUID v7. Bisa di-generate oleh
+/// sistem (`BusinessId::new`) atau ditentukan oleh pemanggil (dipakai untuk
+/// idempotent create, lihat `Business::with_id`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BusinessId(Uuid);
 
@@ -131,16 +133,32 @@ pub struct Business {
 }
 
 impl Business {
-    /// Membuat Business baru di bawah sebuah Tenant.
+    /// Membuat Business baru di bawah sebuah Tenant, dengan Id yang
+    /// di-generate otomatis oleh sistem.
     ///
     /// PENTING: keunikan nama per Tenant TIDAK dicek di sini karena entity
     /// tidak boleh mengakses data Business lain (butuh Repository).
     /// Panggil `rules::ensure_business_name_unique` di Application Service
     /// sebelum memanggil constructor ini.
     pub fn new(tenant_id: TenantId, name: BusinessName, business_type: BusinessType) -> Self {
+        Self::with_id(BusinessId::new(), tenant_id, name, business_type)
+    }
+
+    /// Membuat Business baru dengan Id yang SUDAH ditentukan (mis. dikirim
+    /// oleh client saat request create).
+    ///
+    /// Alasan sama seperti `Tenant::with_id`: dipakai untuk idempotent
+    /// create — retry request create yang sama (Id sama) dari client tidak
+    /// membuat Business duplikat, dan jadi fondasi alami untuk Offline First.
+    pub fn with_id(
+        id: BusinessId,
+        tenant_id: TenantId,
+        name: BusinessName,
+        business_type: BusinessType,
+    ) -> Self {
         let now = Utc::now();
         Self {
-            id: BusinessId::new(),
+            id,
             tenant_id,
             name,
             business_type,
@@ -298,6 +316,20 @@ mod tests {
         assert_eq!(business.tenant_id(), tenant_id);
         assert_eq!(business.version(), 0);
         assert!(!business.is_deleted());
+    }
+
+    #[test]
+    fn with_id_uses_the_given_id() {
+        let id = BusinessId::new();
+        let tenant_id = sample_tenant_id();
+        let business = Business::with_id(
+            id,
+            tenant_id,
+            BusinessName::new("Toko Baju").unwrap(),
+            BusinessType::new("retail").unwrap(),
+        );
+        assert_eq!(business.id(), id);
+        assert_eq!(business.version(), 0);
     }
 
     #[test]

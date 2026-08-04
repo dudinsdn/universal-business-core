@@ -7,10 +7,11 @@ use crate::error::DomainError;
 
 const MAX_NAME_LENGTH: usize = 255;
 
-/// Identitas unik Tenant. Selalu dibuat oleh sistem (UUID v7: timestamp +
-/// random, urut berdasarkan waktu dibuat), tidak pernah diisi manual oleh
-/// user — sesuai Development Rules: jangan pakai auto-increment integer
-/// sebagai identitas utama.
+/// Identitas unik Tenant. Selalu berupa UUID v7 (timestamp + random, urut
+/// berdasarkan waktu dibuat) — sesuai Development Rules: jangan pakai
+/// auto-increment integer sebagai identitas utama. Bisa di-generate oleh
+/// sistem (`TenantId::new`) atau ditentukan oleh pemanggil (dipakai untuk
+/// idempotent create, lihat `Tenant::with_id`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TenantId(Uuid);
 
@@ -91,12 +92,25 @@ pub struct Tenant {
 }
 
 impl Tenant {
-    /// Satu-satunya cara membuat Tenant baru dari luar modul ini,
-    /// sehingga Tenant tidak pernah berada pada state yang tidak valid.
+    /// Membuat Tenant baru dengan Id yang di-generate otomatis oleh sistem.
     pub fn new(name: TenantName) -> Self {
+        Self::with_id(TenantId::new(), name)
+    }
+
+    /// Membuat Tenant baru dengan Id yang SUDAH ditentukan (mis. dikirim
+    /// oleh client saat request create).
+    ///
+    /// Dipakai untuk idempotent create: kalau client mengirim ulang
+    /// request create yang sama (retry akibat timeout, koneksi putus, dll)
+    /// dengan Id yang sama, Application Service bisa mendeteksi Tenant itu
+    /// sudah ada dan mengembalikannya apa adanya — bukan membuat Tenant
+    /// duplikat. Pola ini juga jadi fondasi alami untuk Offline First:
+    /// entity yang dibuat saat offline butuh Id sebelum sempat disinkron
+    /// ke server.
+    pub fn with_id(id: TenantId, name: TenantName) -> Self {
         let now = Utc::now();
         Self {
-            id: TenantId::new(),
+            id,
             name,
             created_at: now,
             updated_at: now,
@@ -110,9 +124,9 @@ impl Tenant {
     }
 
     /// Merekonstruksi Tenant dari data yang SUDAH tersimpan (mis. satu baris
-    /// hasil query database). Berbeda dari `Tenant::new` yang selalu
-    /// membuat identitas & timestamp baru — dipakai HANYA oleh implementasi
-    /// Repository konkret saat memuat entity yang sudah ada.
+    /// hasil query database). Berbeda dari `Tenant::new`/`with_id` yang
+    /// selalu membuat state Tenant baru (version 0) — dipakai HANYA oleh
+    /// implementasi Repository konkret saat memuat entity yang sudah ada.
     pub fn from_persisted(
         id: TenantId,
         name: TenantName,
@@ -233,6 +247,14 @@ mod tests {
         let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
         assert_eq!(tenant.version(), 0);
         assert!(!tenant.is_deleted());
+    }
+
+    #[test]
+    fn with_id_uses_the_given_id() {
+        let id = TenantId::new();
+        let tenant = Tenant::with_id(id, TenantName::new("Tenant A").unwrap());
+        assert_eq!(tenant.id(), id);
+        assert_eq!(tenant.version(), 0);
     }
 
     #[test]

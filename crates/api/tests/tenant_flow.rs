@@ -178,3 +178,72 @@ async fn create_tenant_rejects_empty_name() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(err["error"].as_str().unwrap().contains("kosong"));
 }
+
+#[tokio::test]
+async fn create_tenant_with_same_id_is_idempotent() {
+    let app = app();
+    let id = domain::TenantId::new().to_string();
+
+    let (status, first) = send(
+        &app,
+        json_request("POST", "/tenants", json!({ "id": id, "name": "Tenant A" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    // Retry: Id sama, nama beda (mensimulasikan client kirim ulang request
+    // setelah timeout). Harus 200 OK, bukan 201, dan data yang dikembalikan
+    // adalah Tenant PERTAMA — bukan duplikat, bukan ketimpa nama baru.
+    let (status, second) = send(
+        &app,
+        json_request(
+            "POST",
+            "/tenants",
+            json!({ "id": id, "name": "Tenant A Lain" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(second["id"], first["id"]);
+    assert_eq!(second["name"], first["name"]);
+    assert_eq!(second["version"], 0);
+}
+
+#[tokio::test]
+async fn create_business_with_same_id_is_idempotent() {
+    let app = app();
+
+    let (_, tenant) = send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant A" })),
+    )
+    .await;
+    let tenant_id = tenant["id"].as_str().unwrap().to_string();
+    let business_id = domain::BusinessId::new().to_string();
+
+    let (status, first) = send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/tenants/{tenant_id}/businesses"),
+            json!({ "id": business_id, "name": "Toko Baju", "business_type": "retail" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    // Retry dengan Id sama, nama beda — harus 200 OK dan mengembalikan
+    // business PERTAMA, bukan ditolak sebagai "nama duplikat".
+    let (status, second) = send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/tenants/{tenant_id}/businesses"),
+            json!({ "id": business_id, "name": "Toko Baju Lain", "business_type": "retail" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(second["id"], first["id"]);
+    assert_eq!(second["name"], first["name"]);
+}

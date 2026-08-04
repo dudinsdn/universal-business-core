@@ -4,6 +4,13 @@ use domain::{Business, Tenant};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTenantRequest {
+    /// Id yang ditentukan client (opsional). Kalau diisi, dipakai untuk
+    /// idempotent create: retry request create yang sama (Id sama) tidak
+    /// akan membuat Tenant duplikat — Tenant yang sudah ada dikembalikan.
+    /// Kalau kosong, server yang generate Id baru (perilaku lama, tanpa
+    /// jaminan idempotent).
+    #[serde(default)]
+    pub id: Option<String>,
     pub name: String,
 }
 
@@ -20,6 +27,10 @@ pub struct DeleteRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateBusinessRequest {
+    /// Sama seperti `CreateTenantRequest::id` — opsional, untuk idempotent
+    /// create.
+    #[serde(default)]
+    pub id: Option<String>,
     pub name: String,
     pub business_type: String,
 }

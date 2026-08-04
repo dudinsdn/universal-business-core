@@ -15,10 +15,29 @@ impl<R: TenantRepository> TenantService<R> {
         Self { repository }
     }
 
-    pub async fn create_tenant(&self, name: TenantName) -> Result<Tenant, ApplicationError> {
-        let tenant = Tenant::new(name);
+    /// Membuat Tenant baru — idempotent terhadap `id`.
+    ///
+    /// `id` BOLEH ditentukan oleh pemanggil (client). Kalau Tenant dengan
+    /// `id` tersebut SUDAH ada, ini dianggap pengulangan request create
+    /// (retry akibat timeout dsb.), bukan permintaan baru: Tenant yang
+    /// sudah ada dikembalikan apa adanya, TIDAK dibuat duplikat dan TIDAK
+    /// ditimpa oleh `name` baru.
+    ///
+    /// Return value `bool`: `true` kalau Tenant benar-benar baru dibuat,
+    /// `false` kalau ini hasil replay idempotent. Dipakai pemanggil (API)
+    /// untuk menentukan status HTTP (`201 Created` vs `200 OK`).
+    pub async fn create_tenant(
+        &self,
+        id: TenantId,
+        name: TenantName,
+    ) -> Result<(Tenant, bool), ApplicationError> {
+        if let Some(existing) = self.repository.find_by_id(id).await? {
+            return Ok((existing, false));
+        }
+
+        let tenant = Tenant::with_id(id, name);
         self.repository.save(&tenant).await?;
-        Ok(tenant)
+        Ok((tenant, true))
     }
 
     /// Mengambil satu Tenant berdasarkan id. Dibutuhkan pemanggil (mis. API)
@@ -85,27 +104,60 @@ mod tests {
     use crate::in_memory::{InMemoryBusinessRepository, InMemoryTenantRepository};
     use domain::{Business, BusinessName, BusinessType, DomainError};
 
+    /// Helper test: membuat Tenant dengan Id baru yang di-generate acak
+    /// (skenario umum, bukan skenario idempotency).
+    async fn create_test_tenant(
+        service: &TenantService<InMemoryTenantRepository>,
+        name: &str,
+    ) -> Tenant {
+        service
+            .create_tenant(TenantId::new(), TenantName::new(name).unwrap())
+            .await
+            .unwrap()
+            .0
+    }
+
     #[tokio::test]
     async fn create_tenant_saves_and_returns_tenant() {
         let repo = InMemoryTenantRepository::new();
         let service = TenantService::new(repo);
 
-        let tenant = service
-            .create_tenant(TenantName::new("Tenant A").unwrap())
+        let tenant = create_test_tenant(&service, "Tenant A").await;
+
+        assert_eq!(tenant.version(), 0);
+    }
+
+    #[tokio::test]
+    async fn create_tenant_with_same_id_is_idempotent() {
+        let repo = InMemoryTenantRepository::new();
+        let service = TenantService::new(repo);
+        let id = TenantId::new();
+
+        let (first, first_created) = service
+            .create_tenant(id, TenantName::new("Tenant A").unwrap())
+            .await
+            .unwrap();
+        assert!(first_created);
+
+        // Retry dengan Id sama tapi nama beda — mensimulasikan client kirim
+        // ulang request setelah timeout. Tenant lama yang harus
+        // dikembalikan, bukan dibuat baru ataupun ditimpa nama barunya.
+        let (second, second_created) = service
+            .create_tenant(id, TenantName::new("Tenant A Lain").unwrap())
             .await
             .unwrap();
 
-        assert_eq!(tenant.version(), 0);
+        assert!(!second_created);
+        assert_eq!(second.id(), first.id());
+        assert_eq!(second.name(), first.name());
+        assert_eq!(second.version(), 0);
     }
 
     #[tokio::test]
     async fn get_tenant_returns_saved_tenant() {
         let repo = InMemoryTenantRepository::new();
         let service = TenantService::new(repo);
-        let created = service
-            .create_tenant(TenantName::new("Tenant A").unwrap())
-            .await
-            .unwrap();
+        let created = create_test_tenant(&service, "Tenant A").await;
 
         let fetched = service.get_tenant(created.id()).await.unwrap();
 
@@ -126,10 +178,7 @@ mod tests {
     async fn rename_tenant_increments_version() {
         let repo = InMemoryTenantRepository::new();
         let service = TenantService::new(repo);
-        let tenant = service
-            .create_tenant(TenantName::new("Tenant A").unwrap())
-            .await
-            .unwrap();
+        let tenant = create_test_tenant(&service, "Tenant A").await;
 
         let renamed = service
             .rename_tenant(
@@ -148,10 +197,7 @@ mod tests {
     async fn rename_tenant_rejects_stale_version() {
         let repo = InMemoryTenantRepository::new();
         let service = TenantService::new(repo);
-        let tenant = service
-            .create_tenant(TenantName::new("Tenant A").unwrap())
-            .await
-            .unwrap();
+        let tenant = create_test_tenant(&service, "Tenant A").await;
 
         let result = service
             .rename_tenant(
@@ -185,10 +231,7 @@ mod tests {
         let business_repo = InMemoryBusinessRepository::new();
         let service = TenantService::new(tenant_repo);
 
-        let tenant = service
-            .create_tenant(TenantName::new("Tenant A").unwrap())
-            .await
-            .unwrap();
+        let tenant = create_test_tenant(&service, "Tenant A").await;
         let business = Business::new(
             tenant.id(),
             BusinessName::new("Toko Baju").unwrap(),
@@ -214,10 +257,7 @@ mod tests {
         let business_repo = InMemoryBusinessRepository::new();
         let service = TenantService::new(tenant_repo);
 
-        let tenant = service
-            .create_tenant(TenantName::new("Tenant A").unwrap())
-            .await
-            .unwrap();
+        let tenant = create_test_tenant(&service, "Tenant A").await;
 
         let result = service
             .delete_tenant(tenant.id(), tenant.version() + 1, &business_repo)
@@ -235,10 +275,7 @@ mod tests {
         let business_repo = InMemoryBusinessRepository::new();
         let service = TenantService::new(tenant_repo);
 
-        let tenant = service
-            .create_tenant(TenantName::new("Tenant A").unwrap())
-            .await
-            .unwrap();
+        let tenant = create_test_tenant(&service, "Tenant A").await;
 
         service
             .delete_tenant(tenant.id(), tenant.version(), &business_repo)

@@ -25,15 +25,25 @@ where
         .map_err(application::ApplicationError::from)?;
     let tenant = state.tenant_service.get_tenant(tenant_id).await?;
 
+    // Idempotency: sama seperti create_tenant — lihat komentar di sana.
+    let id = match payload.id {
+        Some(raw) => raw.parse().map_err(application::ApplicationError::from)?,
+        None => BusinessId::new(),
+    };
     let name = BusinessName::new(payload.name).map_err(application::ApplicationError::from)?;
     let business_type =
         BusinessType::new(payload.business_type).map_err(application::ApplicationError::from)?;
 
-    let business = state
+    let (business, created) = state
         .business_service
-        .create_business(&tenant, name, business_type)
+        .create_business(&tenant, id, name, business_type)
         .await?;
-    Ok((StatusCode::CREATED, Json(BusinessResponse::from(&business))))
+    let status = if created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
+    Ok((status, Json(BusinessResponse::from(&business))))
 }
 
 pub async fn rename_business<TR, BR>(
