@@ -59,6 +59,7 @@ impl<R: TenantRepository> TenantService<R> {
     pub async fn delete_tenant(
         &self,
         id: TenantId,
+        expected_version: u32,
         business_repository: &impl BusinessRepository,
     ) -> Result<(), ApplicationError> {
         let mut tenant = self
@@ -66,6 +67,8 @@ impl<R: TenantRepository> TenantService<R> {
             .find_by_id(id)
             .await?
             .ok_or(ApplicationError::TenantNotFound)?;
+
+        rules::ensure_version_matches(expected_version, tenant.version())?;
 
         let active_business_count = business_repository.count_active_by_tenant(id).await?;
         rules::ensure_tenant_can_be_deleted(active_business_count)?;
@@ -193,13 +196,36 @@ mod tests {
         );
         business_repo.save(&business).await.unwrap();
 
-        let result = service.delete_tenant(tenant.id(), &business_repo).await;
+        let result = service
+            .delete_tenant(tenant.id(), tenant.version(), &business_repo)
+            .await;
 
         assert!(matches!(
             result,
             Err(ApplicationError::Domain(
                 DomainError::TenantHasActiveBusiness
             ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn delete_tenant_rejects_stale_version() {
+        let tenant_repo = InMemoryTenantRepository::new();
+        let business_repo = InMemoryBusinessRepository::new();
+        let service = TenantService::new(tenant_repo);
+
+        let tenant = service
+            .create_tenant(TenantName::new("Tenant A").unwrap())
+            .await
+            .unwrap();
+
+        let result = service
+            .delete_tenant(tenant.id(), tenant.version() + 1, &business_repo)
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Domain(DomainError::VersionConflict))
         ));
     }
 
@@ -215,7 +241,7 @@ mod tests {
             .unwrap();
 
         service
-            .delete_tenant(tenant.id(), &business_repo)
+            .delete_tenant(tenant.id(), tenant.version(), &business_repo)
             .await
             .unwrap();
 

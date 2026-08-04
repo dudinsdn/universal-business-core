@@ -58,20 +58,16 @@ where
 pub async fn delete_tenant<TR, BR>(
     State(state): State<Arc<AppState<TR, BR>>>,
     Path(id): Path<String>,
-    Json(_payload): Json<DeleteRequest>,
+    Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
 where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
 {
-    // `expected_version` belum dipakai: `TenantService::delete_tenant` saat
-    // ini memang belum mengecek versi (lihat catatan di tenant_service.rs).
-    // Body tetap diminta di sini demi konsistensi bentuk request dengan
-    // delete_business, dan supaya siap begitu pengecekan versi ditambahkan.
     let id: TenantId = id.parse().map_err(application::ApplicationError::from)?;
     state
         .tenant_service
-        .delete_tenant(id, &state.business_repository)
+        .delete_tenant(id, payload.expected_version, &state.business_repository)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

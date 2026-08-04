@@ -128,6 +128,44 @@ async fn get_tenant_returns_404_when_not_found() {
 }
 
 #[tokio::test]
+async fn delete_tenant_rejects_stale_version() {
+    let app = app();
+
+    let (_, tenant) = send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant A" })),
+    )
+    .await;
+    let tenant_id = tenant["id"].as_str().unwrap().to_string();
+
+    // expected_version salah (tenant masih di versi 0) harus ditolak 409,
+    // bukan diam-diam berhasil menghapus.
+    let (status, _) = send(
+        &app,
+        json_request(
+            "DELETE",
+            &format!("/tenants/{tenant_id}"),
+            json!({ "expected_version": 1 }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Tenant tetap ada dan belum terhapus.
+    let (status, fetched) = send(
+        &app,
+        Request::builder()
+            .method("GET")
+            .uri(format!("/tenants/{tenant_id}"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(fetched["is_deleted"], false);
+}
+
+#[tokio::test]
 async fn create_tenant_rejects_empty_name() {
     let app = app();
 
