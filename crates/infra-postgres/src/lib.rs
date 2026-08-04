@@ -1,14 +1,13 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod business_repository;
+pub mod tenant_repository;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub use business_repository::PgBusinessRepository;
+pub use tenant_repository::PgTenantRepository;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+/// Menjalankan migration di folder `migrations/` (di-embed saat compile
+/// lewat `sqlx::migrate!`, bukan dibaca dari disk saat runtime — supaya
+/// binary yang sudah dibuild tidak bergantung pada folder migrations ada
+/// di sebelahnya).
+pub async fn run_migrations(pool: &sqlx::PgPool) -> Result<(), sqlx::migrate::MigrateError> {
+    sqlx::migrate!("./migrations").run(pool).await
 }
