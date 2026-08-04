@@ -25,8 +25,10 @@ dependencies = [
  "axum",
  "domain",
  "http-body-util",
+ "infra-postgres",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tower",
 ]

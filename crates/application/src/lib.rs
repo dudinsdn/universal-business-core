@@ -2,12 +2,13 @@
 //!
 //! Crate ini menjembatani Domain (murni, tanpa I/O) dengan dunia luar
 //! (database, API) lewat trait Repository. Repository di sini masih
-//! berupa *interface* (port) — implementasi konkret (Postgres, dll)
-//! menyusul di crate terpisah nanti, bukan di sini.
+//! berupa *interface* (port) — implementasi konkret ada di crate terpisah
+//! (`infra-postgres` untuk Postgres, `in_memory` di bawah untuk test/API
+//! sebelum database tersambung).
 //!
-//! Repository sengaja dibuat SYNC dulu (bukan async) karena belum ada
-//! kebutuhan nyata untuk async — akan direvisi saat Postgres benar-benar
-//! disambungkan.
+//! Repository bersifat async (lihat `repository.rs`) — driver Postgres
+//! (sqlx) async, jadi trait ini ikut async supaya tidak perlu blocking di
+//! dalam runtime async.
 
 pub mod business_service;
 pub mod error;

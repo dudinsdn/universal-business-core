@@ -7,10 +7,12 @@ rust-version.workspace = true
 [dependencies]
 application = { path = "../application" }
 domain = { path = "../domain" }
+infra-postgres = { path = "../infra-postgres" }
 axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true }
