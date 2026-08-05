@@ -1,4 +1,5 @@
 use application::{BusinessRepository, RepositoryError};
+use chrono::{DateTime, Utc};
 use domain::{Business, BusinessId, BusinessName, TenantId, business::PersistedBusiness};
 use sqlx::PgPool;
 
@@ -153,5 +154,45 @@ impl BusinessRepository for PgBusinessRepository {
         }
 
         Ok(())
+    }
+
+    async fn find_updated_since_by_tenant(
+        &self,
+        tenant_id: TenantId,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Business>, RepositoryError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, tenant_id, name, business_type, created_at, updated_at, deleted_at, version
+            FROM businesses
+            WHERE tenant_id = $1 AND updated_at > $2
+            ORDER BY updated_at ASC
+            "#,
+            tenant_id.as_uuid(),
+            since
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| RepositoryError::Unavailable(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let name = BusinessName::new(row.name)
+                    .map_err(|e| RepositoryError::Unavailable(e.to_string()))?;
+                let business_type = domain::BusinessType::new(row.business_type)
+                    .map_err(|e| RepositoryError::Unavailable(e.to_string()))?;
+
+                Ok(Business::from_persisted(PersistedBusiness {
+                    id: BusinessId::from_uuid(row.id),
+                    tenant_id: TenantId::from_uuid(row.tenant_id),
+                    name,
+                    business_type,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    deleted_at: row.deleted_at,
+                    version: row.version as u32,
+                }))
+            })
+            .collect()
     }
 }

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, Utc};
 use domain::{Business, BusinessId, BusinessName, Tenant, TenantId};
 
 use crate::error::RepositoryError;
@@ -53,6 +54,23 @@ impl TenantRepository for InMemoryTenantRepository {
         }
         data.insert(tenant.id(), tenant.clone());
         Ok(())
+    }
+
+    async fn find_updated_since(
+        &self,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Tenant>, RepositoryError> {
+        let data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        let mut result: Vec<Tenant> = data
+            .values()
+            .filter(|tenant| tenant.updated_at() > since)
+            .cloned()
+            .collect();
+        result.sort_by_key(|tenant| tenant.updated_at());
+        Ok(result)
     }
 }
 
@@ -116,6 +134,24 @@ impl BusinessRepository for InMemoryBusinessRepository {
         data.insert(business.id(), business.clone());
         Ok(())
     }
+
+    async fn find_updated_since_by_tenant(
+        &self,
+        tenant_id: TenantId,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Business>, RepositoryError> {
+        let data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        let mut result: Vec<Business> = data
+            .values()
+            .filter(|b| b.tenant_id() == tenant_id && b.updated_at() > since)
+            .cloned()
+            .collect();
+        result.sort_by_key(|b| b.updated_at());
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -143,5 +179,41 @@ mod tests {
         let result = repo.save(&stale_copy).await;
 
         assert_eq!(result, Err(RepositoryError::VersionConflict));
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_only_returns_tenants_changed_after_cursor() {
+        let repo = InMemoryTenantRepository::new();
+        let old_tenant = Tenant::new(TenantName::new("Tenant Lama").unwrap());
+        repo.save(&old_tenant).await.unwrap();
+
+        let cursor = Utc::now();
+
+        let new_tenant = Tenant::new(TenantName::new("Tenant Baru").unwrap());
+        repo.save(&new_tenant).await.unwrap();
+
+        let changed = repo.find_updated_since(cursor).await.unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), new_tenant.id());
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_includes_soft_deleted_tenants() {
+        let repo = InMemoryTenantRepository::new();
+        let mut tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+        repo.save(&tenant).await.unwrap();
+
+        let cursor = Utc::now();
+
+        // Client offline harus tahu soal penghapusan juga, bukan cuma
+        // perubahan pada entity yang masih aktif.
+        tenant.soft_delete();
+        repo.save(&tenant).await.unwrap();
+
+        let changed = repo.find_updated_since(cursor).await.unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].is_deleted());
     }
 }

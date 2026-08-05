@@ -1,5 +1,6 @@
 use std::future::Future;
 
+use chrono::{DateTime, Utc};
 use domain::{Business, BusinessId, BusinessName, Tenant, TenantId};
 
 use crate::error::RepositoryError;
@@ -23,6 +24,17 @@ pub trait TenantRepository: Send + Sync {
     ) -> impl Future<Output = Result<Option<Tenant>, RepositoryError>> + Send;
 
     fn save(&self, tenant: &Tenant) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    /// Semua Tenant yang berubah (dibuat/diubah/dihapus) sejak `since`,
+    /// diurutkan menaik berdasarkan `updated_at`. TERMASUK Tenant yang
+    /// sudah di-soft-delete — client offline butuh tahu itu juga, supaya
+    /// bisa menghapus salinan lokalnya, bukan cuma menerima yang aktif
+    /// saja. Ini fondasi endpoint incremental sync (`GET /tenants
+    /// ?updated_since=...`) untuk kebutuhan Offline First.
+    fn find_updated_since(
+        &self,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Tenant>, RepositoryError>> + Send;
 }
 
 /// Port untuk menyimpan/mengambil Business.
@@ -47,4 +59,13 @@ pub trait BusinessRepository: Send + Sync {
 
     fn save(&self, business: &Business)
     -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    /// Sama seperti `TenantRepository::find_updated_since`, tapi dibatasi
+    /// pada satu Tenant (konsisten dengan resource path
+    /// `/tenants/{tenant_id}/businesses`).
+    fn find_updated_since_by_tenant(
+        &self,
+        tenant_id: TenantId,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Business>, RepositoryError>> + Send;
 }

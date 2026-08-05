@@ -1,4 +1,5 @@
 use application::{RepositoryError, TenantRepository};
+use chrono::{DateTime, Utc};
 use domain::{Tenant, TenantId, TenantName};
 use sqlx::PgPool;
 
@@ -94,5 +95,38 @@ impl TenantRepository for PgTenantRepository {
         }
 
         Ok(())
+    }
+
+    async fn find_updated_since(
+        &self,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Tenant>, RepositoryError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, created_at, updated_at, deleted_at, version
+            FROM tenants
+            WHERE updated_at > $1
+            ORDER BY updated_at ASC
+            "#,
+            since
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| RepositoryError::Unavailable(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let name = TenantName::new(row.name)
+                    .map_err(|e| RepositoryError::Unavailable(e.to_string()))?;
+                Ok(Tenant::from_persisted(
+                    TenantId::from_uuid(row.id),
+                    name,
+                    row.created_at,
+                    row.updated_at,
+                    row.deleted_at,
+                    row.version as u32,
+                ))
+            })
+            .collect()
     }
 }

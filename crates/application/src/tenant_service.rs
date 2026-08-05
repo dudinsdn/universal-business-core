@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use domain::{Tenant, TenantId, TenantName, rules};
 
 use crate::error::ApplicationError;
@@ -48,6 +49,17 @@ impl<R: TenantRepository> TenantService<R> {
             .find_by_id(id)
             .await?
             .ok_or(ApplicationError::TenantNotFound)
+    }
+
+    /// Semua Tenant yang berubah sejak `since` — dipakai endpoint
+    /// incremental sync (`GET /tenants?updated_since=...`). Lihat
+    /// `TenantRepository::find_updated_since` untuk detail (termasuk
+    /// Tenant yang sudah di-soft-delete).
+    pub async fn list_updated_since(
+        &self,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Tenant>, ApplicationError> {
+        Ok(self.repository.find_updated_since(since).await?)
     }
 
     pub async fn rename_tenant(
@@ -172,6 +184,35 @@ mod tests {
         let result = service.get_tenant(TenantId::new()).await;
 
         assert!(matches!(result, Err(ApplicationError::TenantNotFound)));
+    }
+
+    #[tokio::test]
+    async fn list_updated_since_excludes_tenants_changed_before_cursor() {
+        let repo = InMemoryTenantRepository::new();
+        let service = TenantService::new(repo);
+
+        create_test_tenant(&service, "Tenant Lama").await;
+        let cursor = Utc::now();
+        let baru = create_test_tenant(&service, "Tenant Baru").await;
+
+        let changed = service.list_updated_since(cursor).await.unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), baru.id());
+    }
+
+    #[tokio::test]
+    async fn list_updated_since_with_epoch_cursor_returns_everything() {
+        let repo = InMemoryTenantRepository::new();
+        let service = TenantService::new(repo);
+
+        create_test_tenant(&service, "Tenant A").await;
+        create_test_tenant(&service, "Tenant B").await;
+
+        let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let changed = service.list_updated_since(epoch).await.unwrap();
+
+        assert_eq!(changed.len(), 2);
     }
 
     #[tokio::test]

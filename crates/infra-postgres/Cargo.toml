@@ -8,6 +8,7 @@ rust-version.workspace = true
 application = { path = "../application" }
 domain = { path = "../domain" }
 sqlx = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -13,6 +13,7 @@
 //! pesan pendamping.
 
 use application::{BusinessRepository, RepositoryError, TenantRepository};
+use chrono::Utc;
 use domain::{Business, BusinessName, BusinessType, Tenant, TenantName};
 use infra_postgres::{PgBusinessRepository, PgTenantRepository};
 use sqlx::PgPool;
@@ -153,5 +154,81 @@ async fn count_active_by_tenant_excludes_soft_deleted(pool: PgPool) -> sqlx::Res
             .unwrap(),
         0
     );
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_only_returns_tenants_changed_after_cursor(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let repo = PgTenantRepository::new(pool);
+
+    let old_tenant = Tenant::new(TenantName::new("Tenant Lama").unwrap());
+    repo.save(&old_tenant).await.unwrap();
+
+    let cursor = Utc::now();
+
+    let new_tenant = Tenant::new(TenantName::new("Tenant Baru").unwrap());
+    repo.save(&new_tenant).await.unwrap();
+
+    let changed = repo.find_updated_since(cursor).await.unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].id(), new_tenant.id());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_includes_soft_deleted_tenants(pool: PgPool) -> sqlx::Result<()> {
+    let repo = PgTenantRepository::new(pool);
+
+    let mut tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    repo.save(&tenant).await.unwrap();
+
+    let cursor = Utc::now();
+
+    // Client offline harus tahu soal penghapusan juga, bukan cuma
+    // perubahan pada entity yang masih aktif.
+    tenant.soft_delete();
+    repo.save(&tenant).await.unwrap();
+
+    let changed = repo.find_updated_since(cursor).await.unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].is_deleted());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_tenant_excludes_other_tenants(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool);
+
+    let tenant_a = Tenant::new(TenantName::new("Tenant A").unwrap());
+    let tenant_b = Tenant::new(TenantName::new("Tenant B").unwrap());
+    tenant_repo.save(&tenant_a).await.unwrap();
+    tenant_repo.save(&tenant_b).await.unwrap();
+
+    let business_a = Business::new(
+        tenant_a.id(),
+        BusinessName::new("Toko A").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    let business_b = Business::new(
+        tenant_b.id(),
+        BusinessName::new("Toko B").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business_a).await.unwrap();
+    business_repo.save(&business_b).await.unwrap();
+
+    let epoch = chrono::DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+    let changed = business_repo
+        .find_updated_since_by_tenant(tenant_a.id(), epoch)
+        .await
+        .unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].id(), business_a.id());
     Ok(())
 }

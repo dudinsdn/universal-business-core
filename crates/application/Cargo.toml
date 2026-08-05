@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 domain = { path = "../domain" }
+chrono = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

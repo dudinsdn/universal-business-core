@@ -23,6 +23,7 @@ version = "0.1.0"
 dependencies = [
  "application",
  "axum",
+ "chrono",
  "domain",
  "http-body-util",
  "infra-postgres",
@@ -37,6 +38,7 @@ dependencies = [
 name = "application"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "domain",
  "tokio",
 ]
@@ -755,6 +757,7 @@ name = "infra-postgres"
 version = "0.1.0"
 dependencies = [
  "application",
+ "chrono",
  "domain",
  "sqlx",
  "tokio",

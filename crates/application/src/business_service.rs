@@ -1,4 +1,5 @@
-use domain::{Business, BusinessId, BusinessName, BusinessType, Tenant, rules};
+use chrono::{DateTime, Utc};
+use domain::{Business, BusinessId, BusinessName, BusinessType, Tenant, TenantId, rules};
 
 use crate::error::ApplicationError;
 use crate::repository::BusinessRepository;
@@ -49,6 +50,22 @@ impl<R: BusinessRepository> BusinessService<R> {
         let business = Business::with_id(id, tenant.id(), name, business_type);
         self.repository.save(&business).await?;
         Ok((business, true))
+    }
+
+    /// Semua Business di bawah satu Tenant yang berubah sejak `since` —
+    /// dipakai endpoint incremental sync
+    /// (`GET /tenants/{tenant_id}/businesses?updated_since=...`). Lihat
+    /// `BusinessRepository::find_updated_since_by_tenant` untuk detail
+    /// (termasuk Business yang sudah di-soft-delete).
+    pub async fn list_updated_since(
+        &self,
+        tenant_id: TenantId,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Business>, ApplicationError> {
+        Ok(self
+            .repository
+            .find_updated_since_by_tenant(tenant_id, since)
+            .await?)
     }
 
     pub async fn rename_business(
@@ -239,6 +256,45 @@ mod tests {
         assert!(!second_created);
         assert_eq!(second.id(), first.id());
         assert_eq!(second.name(), first.name());
+    }
+
+    #[tokio::test]
+    async fn list_updated_since_only_returns_business_from_that_tenant() {
+        let repo = InMemoryBusinessRepository::new();
+        let service = BusinessService::new(repo);
+        let tenant_a = active_tenant();
+        let tenant_b = active_tenant();
+
+        create_test_business(&service, &tenant_a, "Toko A").await;
+        create_test_business(&service, &tenant_b, "Toko B").await;
+
+        let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let changed = service
+            .list_updated_since(tenant_a.id(), epoch)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].tenant_id(), tenant_a.id());
+    }
+
+    #[tokio::test]
+    async fn list_updated_since_excludes_business_changed_before_cursor() {
+        let repo = InMemoryBusinessRepository::new();
+        let service = BusinessService::new(repo);
+        let tenant = active_tenant();
+
+        create_test_business(&service, &tenant, "Toko Lama").await;
+        let cursor = Utc::now();
+        let baru = create_test_business(&service, &tenant, "Toko Baru").await;
+
+        let changed = service
+            .list_updated_since(tenant.id(), cursor)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), baru.id());
     }
 
     #[tokio::test]

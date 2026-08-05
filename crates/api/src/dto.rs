@@ -35,6 +35,17 @@ pub struct CreateBusinessRequest {
     pub business_type: String,
 }
 
+/// Query param untuk endpoint incremental sync (`GET /tenants
+/// ?updated_since=...` dan `GET /tenants/{id}/businesses?updated_since=...`).
+#[derive(Debug, Deserialize)]
+pub struct SyncQuery {
+    /// Timestamp RFC 3339, mis. "2026-08-01T00:00:00Z". Kosong berarti
+    /// "sejak awal waktu" — dipakai client untuk full sync pertama kali
+    /// (belum pernah sinkron sebelumnya).
+    #[serde(default)]
+    pub updated_since: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TenantResponse {
     pub id: String,

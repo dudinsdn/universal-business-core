@@ -32,6 +32,14 @@ fn json_request(method: &str, uri: &str, body: Value) -> Request<Body> {
         .unwrap()
 }
 
+fn get_request(uri: &str) -> Request<Body> {
+    Request::builder()
+        .method("GET")
+        .uri(uri)
+        .body(Body::empty())
+        .unwrap()
+}
+
 #[tokio::test]
 async fn full_flow_create_rename_delete() {
     let app = app();
@@ -114,15 +122,7 @@ async fn get_tenant_returns_404_when_not_found() {
     let app = app();
     let random_id = domain::TenantId::new().to_string();
 
-    let (status, _) = send(
-        &app,
-        Request::builder()
-            .method("GET")
-            .uri(format!("/tenants/{random_id}"))
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
+    let (status, _) = send(&app, get_request(&format!("/tenants/{random_id}"))).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
@@ -152,15 +152,7 @@ async fn delete_tenant_rejects_stale_version() {
     assert_eq!(status, StatusCode::CONFLICT);
 
     // Tenant tetap ada dan belum terhapus.
-    let (status, fetched) = send(
-        &app,
-        Request::builder()
-            .method("GET")
-            .uri(format!("/tenants/{tenant_id}"))
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
+    let (status, fetched) = send(&app, get_request(&format!("/tenants/{tenant_id}"))).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(fetched["is_deleted"], false);
 }
@@ -246,4 +238,139 @@ async fn create_business_with_same_id_is_idempotent() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(second["id"], first["id"]);
     assert_eq!(second["name"], first["name"]);
+}
+
+#[tokio::test]
+async fn list_tenants_without_cursor_returns_everything() {
+    let app = app();
+
+    send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant A" })),
+    )
+    .await;
+    send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant B" })),
+    )
+    .await;
+
+    // Tanpa `updated_since` -> full sync, kembalikan semua Tenant.
+    let (status, tenants) = send(&app, get_request("/tenants")).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(tenants.as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn list_tenants_only_returns_changes_after_cursor() {
+    let app = app();
+
+    send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant Lama" })),
+    )
+    .await;
+
+    let (_, marker) = send(&app, get_request("/tenants")).await;
+    let cursor = marker.as_array().unwrap()[0]["id"].clone();
+    // Ambil timestamp saat ini lewat sisi client sebagai cursor: cukup
+    // pakai waktu sekarang, karena Tenant "Baru" pasti dibuat setelah ini.
+    let _ = cursor; // hanya memastikan response awal memang berisi data.
+
+    let cursor_time = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
+    send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant Baru" })),
+    )
+    .await;
+
+    let (status, changed) = send(
+        &app,
+        get_request(&format!("/tenants?updated_since={cursor_time}")),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let changed = changed.as_array().unwrap();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0]["name"], "Tenant Baru");
+}
+
+#[tokio::test]
+async fn list_tenants_rejects_invalid_updated_since() {
+    let app = app();
+
+    let (status, err) = send(&app, get_request("/tenants?updated_since=bukan-tanggal")).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(err["error"].as_str().unwrap().contains("RFC 3339"));
+}
+
+#[tokio::test]
+async fn list_businesses_scoped_to_tenant_and_includes_soft_deleted() {
+    let app = app();
+
+    let (_, tenant) = send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant A" })),
+    )
+    .await;
+    let tenant_id = tenant["id"].as_str().unwrap().to_string();
+
+    let (_, business) = send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/tenants/{tenant_id}/businesses"),
+            json!({ "name": "Toko Baju", "business_type": "retail" }),
+        ),
+    )
+    .await;
+    let business_id = business["id"].as_str().unwrap().to_string();
+
+    // Tanpa cursor -> full sync, kembalikan semua business tenant ini.
+    let (status, list) = send(
+        &app,
+        get_request(&format!("/tenants/{tenant_id}/businesses")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.as_array().unwrap().len(), 1);
+
+    // Hapus business-nya, lalu sync lagi -> harus tetap muncul (soft
+    // deleted), supaya client offline tahu harus menghapus salinan lokal.
+    send(
+        &app,
+        json_request(
+            "DELETE",
+            &format!("/businesses/{business_id}"),
+            json!({ "expected_version": 0 }),
+        ),
+    )
+    .await;
+
+    let (status, list) = send(
+        &app,
+        get_request(&format!("/tenants/{tenant_id}/businesses")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let list = list.as_array().unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0]["is_deleted"], true);
+}
+
+#[tokio::test]
+async fn list_businesses_returns_404_when_tenant_not_found() {
+    let app = app();
+    let random_id = domain::TenantId::new().to_string();
+
+    let (status, _) = send(
+        &app,
+        get_request(&format!("/tenants/{random_id}/businesses")),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

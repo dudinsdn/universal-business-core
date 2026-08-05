@@ -29,7 +29,8 @@ impl IntoResponse for ApiError {
                 | DomainError::NameTooLong { .. }
                 | DomainError::EmptyBusinessType
                 | DomainError::InvalidBusinessType
-                | DomainError::InvalidId => StatusCode::BAD_REQUEST,
+                | DomainError::InvalidId
+                | DomainError::InvalidTimestamp => StatusCode::BAD_REQUEST,
                 DomainError::DuplicateBusinessName
                 | DomainError::TenantHasActiveBusiness
                 | DomainError::TenantIsDeleted

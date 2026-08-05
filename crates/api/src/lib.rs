@@ -2,6 +2,7 @@ pub mod business_routes;
 pub mod dto;
 pub mod error;
 pub mod state;
+pub mod sync_routes;
 pub mod tenant_routes;
 
 use std::sync::Arc;
@@ -27,7 +28,11 @@ where
     BR: BusinessRepository + Clone + 'static,
 {
     Router::new()
-        .route("/tenants", post(tenant_routes::create_tenant::<TR, BR>))
+        .route(
+            "/tenants",
+            post(tenant_routes::create_tenant::<TR, BR>)
+                .get(sync_routes::list_tenants_updated_since::<TR, BR>),
+        )
         .route(
             "/tenants/{id}",
             get(tenant_routes::get_tenant::<TR, BR>)
@@ -36,7 +41,8 @@ where
         )
         .route(
             "/tenants/{tenant_id}/businesses",
-            post(business_routes::create_business::<TR, BR>),
+            post(business_routes::create_business::<TR, BR>)
+                .get(sync_routes::list_businesses_updated_since::<TR, BR>),
         )
         .route(
             "/businesses/{id}",

@@ -7,7 +7,9 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DomainError {
     EmptyName,
-    NameTooLong { max: usize },
+    NameTooLong {
+        max: usize,
+    },
     EmptyBusinessType,
     InvalidBusinessType,
     DuplicateBusinessName,
@@ -15,6 +17,9 @@ pub enum DomainError {
     TenantIsDeleted,
     VersionConflict,
     InvalidId,
+    /// Query param `updated_since` (endpoint incremental sync) tidak
+    /// berupa timestamp RFC 3339 yang valid.
+    InvalidTimestamp,
 }
 
 impl fmt::Display for DomainError {
@@ -45,6 +50,10 @@ impl fmt::Display for DomainError {
                 "versi data tidak sesuai, kemungkinan data sudah diubah pihak lain"
             ),
             DomainError::InvalidId => write!(f, "format id tidak valid"),
+            DomainError::InvalidTimestamp => write!(
+                f,
+                "format waktu tidak valid, gunakan format RFC 3339 (mis. 2026-08-01T00:00:00Z)"
+            ),
         }
     }
 }
