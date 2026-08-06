@@ -54,6 +54,7 @@ pub enum ApplicationError {
     Repository(RepositoryError),
     TenantNotFound,
     BusinessNotFound,
+    CustomerNotFound,
 }
 
 impl fmt::Display for ApplicationError {
@@ -63,6 +64,7 @@ impl fmt::Display for ApplicationError {
             ApplicationError::Repository(err) => write!(f, "{err}"),
             ApplicationError::TenantNotFound => write!(f, "tenant tidak ditemukan"),
             ApplicationError::BusinessNotFound => write!(f, "business tidak ditemukan"),
+            ApplicationError::CustomerNotFound => write!(f, "customer tidak ditemukan"),
         }
     }
 }

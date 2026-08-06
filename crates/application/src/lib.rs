@@ -11,13 +11,17 @@
 //! dalam runtime async.
 
 pub mod business_service;
+pub mod customer_service;
 pub mod error;
 pub mod in_memory;
 pub mod repository;
 pub mod tenant_service;
 
 pub use business_service::BusinessService;
+pub use customer_service::CustomerService;
 pub use error::{ApplicationError, RepositoryError};
-pub use in_memory::{InMemoryBusinessRepository, InMemoryTenantRepository};
-pub use repository::{BusinessRepository, TenantRepository};
+pub use in_memory::{
+    InMemoryBusinessRepository, InMemoryCustomerRepository, InMemoryTenantRepository,
+};
+pub use repository::{BusinessRepository, CustomerRepository, TenantRepository};
 pub use tenant_service::TenantService;

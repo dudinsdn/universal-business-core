@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
-use domain::{Business, BusinessId, BusinessName, Tenant, TenantId};
+use domain::{Business, BusinessId, BusinessName, Customer, CustomerId, Tenant, TenantId};
 
 use crate::error::RepositoryError;
 
@@ -68,4 +68,29 @@ pub trait BusinessRepository: Send + Sync {
         tenant_id: TenantId,
         since: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<Business>, RepositoryError>> + Send;
+}
+
+/// Port untuk menyimpan/mengambil Customer.
+///
+/// Tidak ada method sejenis `find_active_names_by_tenant` seperti di
+/// `BusinessRepository` — nama Customer sengaja TIDAK unik (keputusan
+/// domain yang sudah diambil), jadi tidak ada business rule keunikan yang
+/// perlu dicek lewat Repository di sini.
+pub trait CustomerRepository: Send + Sync {
+    fn find_by_id(
+        &self,
+        id: CustomerId,
+    ) -> impl Future<Output = Result<Option<Customer>, RepositoryError>> + Send;
+
+    fn save(&self, customer: &Customer)
+    -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    /// Sama seperti `BusinessRepository::find_updated_since_by_tenant`, tapi
+    /// dibatasi pada satu Business (Customer bernaung di bawah Business,
+    /// bukan langsung di bawah Tenant).
+    fn find_updated_since_by_business(
+        &self,
+        business_id: BusinessId,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Customer>, RepositoryError>> + Send;
 }
