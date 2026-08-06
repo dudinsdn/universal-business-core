@@ -30,10 +30,14 @@ impl IntoResponse for ApiError {
                 | DomainError::EmptyBusinessType
                 | DomainError::InvalidBusinessType
                 | DomainError::InvalidId
-                | DomainError::InvalidTimestamp => StatusCode::BAD_REQUEST,
+                | DomainError::InvalidTimestamp
+                | DomainError::EmptyPhone
+                | DomainError::PhoneTooLong { .. }
+                | DomainError::InvalidPhone => StatusCode::BAD_REQUEST,
                 DomainError::DuplicateBusinessName
                 | DomainError::TenantHasActiveBusiness
                 | DomainError::TenantIsDeleted
+                | DomainError::BusinessIsDeleted
                 | DomainError::VersionConflict => StatusCode::CONFLICT,
             },
             ApplicationError::TenantNotFound | ApplicationError::BusinessNotFound => {

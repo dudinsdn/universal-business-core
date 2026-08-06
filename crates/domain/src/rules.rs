@@ -50,6 +50,16 @@ pub fn ensure_version_matches(expected: u32, actual: u32) -> Result<(), DomainEr
     Ok(())
 }
 
+/// Business rule: Customer hanya boleh dibuat di bawah Business yang
+/// masih aktif (belum di-soft-delete). Analog `ensure_tenant_is_active`,
+/// tapi untuk aggregate boundary Business -> Customer.
+pub fn ensure_business_is_active(business_is_deleted: bool) -> Result<(), DomainError> {
+    if business_is_deleted {
+        return Err(DomainError::BusinessIsDeleted);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +137,18 @@ mod tests {
     #[test]
     fn allows_update_when_version_matches() {
         assert_eq!(ensure_version_matches(2, 2), Ok(()));
+    }
+
+    #[test]
+    fn rejects_customer_creation_when_business_is_deleted() {
+        assert_eq!(
+            ensure_business_is_active(true),
+            Err(DomainError::BusinessIsDeleted)
+        );
+    }
+
+    #[test]
+    fn allows_customer_creation_when_business_is_active() {
+        assert_eq!(ensure_business_is_active(false), Ok(()));
     }
 }
