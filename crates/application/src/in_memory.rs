@@ -17,13 +17,14 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 use domain::{
-    Business, BusinessId, BusinessName, Customer, CustomerId, Tenant, TenantId, Transaction,
-    TransactionId,
+    Business, BusinessId, BusinessName, Customer, CustomerId, Relationship, RelationshipId, Tenant,
+    TenantId, Transaction, TransactionId,
 };
 
 use crate::error::RepositoryError;
 use crate::repository::{
-    BusinessRepository, CustomerRepository, TenantRepository, TransactionRepository,
+    BusinessRepository, CustomerRepository, RelationshipRepository, TenantRepository,
+    TransactionRepository,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -267,10 +268,67 @@ impl TransactionRepository for InMemoryTransactionRepository {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct InMemoryRelationshipRepository {
+    data: Arc<Mutex<HashMap<RelationshipId, Relationship>>>,
+}
+
+impl InMemoryRelationshipRepository {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl RelationshipRepository for InMemoryRelationshipRepository {
+    async fn find_by_id(
+        &self,
+        id: RelationshipId,
+    ) -> Result<Option<Relationship>, RepositoryError> {
+        let data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        Ok(data.get(&id).cloned())
+    }
+
+    async fn save(&self, relationship: &Relationship) -> Result<(), RepositoryError> {
+        let mut data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        if let Some(existing) = data.get(&relationship.id()) {
+            let expected_previous_version = relationship.version().saturating_sub(1);
+            if existing.version() != expected_previous_version {
+                return Err(RepositoryError::VersionConflict);
+            }
+        }
+        data.insert(relationship.id(), relationship.clone());
+        Ok(())
+    }
+
+    async fn find_updated_since_by_business(
+        &self,
+        business_id: BusinessId,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Relationship>, RepositoryError> {
+        let data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        let mut result: Vec<Relationship> = data
+            .values()
+            .filter(|r| r.business_id() == business_id && r.updated_at() > since)
+            .cloned()
+            .collect();
+        result.sort_by_key(|r| r.updated_at());
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use domain::{CustomerName, TenantName, TransactionAmount, TransactionKind};
+    use domain::{CustomerName, RelationshipType, TenantName, TransactionAmount, TransactionKind};
 
     #[tokio::test]
     async fn save_detects_concurrent_version_conflict() {
@@ -535,6 +593,131 @@ mod tests {
         // Client offline harus tahu soal penghapusan juga.
         transaction.soft_delete();
         repo.save(&transaction).await.unwrap();
+
+        let changed = repo
+            .find_updated_since_by_business(business_id, cursor)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].is_deleted());
+    }
+
+    #[tokio::test]
+    async fn save_detects_concurrent_version_conflict_for_relationship() {
+        let repo = InMemoryRelationshipRepository::new();
+        let mut relationship = Relationship::new(
+            BusinessId::new(),
+            CustomerId::new(),
+            CustomerId::new(),
+            RelationshipType::new("referral").unwrap(),
+        )
+        .unwrap();
+        repo.save(&relationship).await.unwrap();
+
+        // Dua "pembaca" sama-sama mulai dari data versi 0.
+        let mut stale_copy = relationship.clone();
+
+        // Salah satu menang duluan: soft delete, jadi versi 1, berhasil
+        // disimpan.
+        relationship.soft_delete();
+        repo.save(&relationship).await.unwrap();
+
+        // Yang telat masih berdasarkan versi 0 saat mulai mutasi — mencoba
+        // soft delete juga, tapi versi 0 di penyimpanan sudah tidak ada
+        // lagi — harus ditolak sebagai conflict.
+        stale_copy.soft_delete();
+        let result = repo.save(&stale_copy).await;
+
+        assert_eq!(result, Err(RepositoryError::VersionConflict));
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_only_returns_relationships_changed_after_cursor() {
+        let repo = InMemoryRelationshipRepository::new();
+        let business_id = BusinessId::new();
+
+        let old_relationship = Relationship::new(
+            business_id,
+            CustomerId::new(),
+            CustomerId::new(),
+            RelationshipType::new("referral").unwrap(),
+        )
+        .unwrap();
+        repo.save(&old_relationship).await.unwrap();
+
+        let cursor = Utc::now();
+
+        let new_relationship = Relationship::new(
+            business_id,
+            CustomerId::new(),
+            CustomerId::new(),
+            RelationshipType::new("referral").unwrap(),
+        )
+        .unwrap();
+        repo.save(&new_relationship).await.unwrap();
+
+        let changed = repo
+            .find_updated_since_by_business(business_id, cursor)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), new_relationship.id());
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_excludes_other_businesses_for_relationship() {
+        let repo = InMemoryRelationshipRepository::new();
+        let business_a = BusinessId::new();
+        let business_b = BusinessId::new();
+
+        let relationship_a = Relationship::new(
+            business_a,
+            CustomerId::new(),
+            CustomerId::new(),
+            RelationshipType::new("referral").unwrap(),
+        )
+        .unwrap();
+        let relationship_b = Relationship::new(
+            business_b,
+            CustomerId::new(),
+            CustomerId::new(),
+            RelationshipType::new("referral").unwrap(),
+        )
+        .unwrap();
+        repo.save(&relationship_a).await.unwrap();
+        repo.save(&relationship_b).await.unwrap();
+
+        let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let changed = repo
+            .find_updated_since_by_business(business_a, epoch)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), relationship_a.id());
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_includes_soft_deleted_relationships() {
+        let repo = InMemoryRelationshipRepository::new();
+        let business_id = BusinessId::new();
+
+        let mut relationship = Relationship::new(
+            business_id,
+            CustomerId::new(),
+            CustomerId::new(),
+            RelationshipType::new("referral").unwrap(),
+        )
+        .unwrap();
+        repo.save(&relationship).await.unwrap();
+
+        let cursor = Utc::now();
+
+        // Client offline harus tahu soal penghapusan juga.
+        relationship.soft_delete();
+        repo.save(&relationship).await.unwrap();
 
         let changed = repo
             .find_updated_since_by_business(business_id, cursor)

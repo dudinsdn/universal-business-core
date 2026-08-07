@@ -2,8 +2,8 @@ use std::future::Future;
 
 use chrono::{DateTime, Utc};
 use domain::{
-    Business, BusinessId, BusinessName, Customer, CustomerId, Tenant, TenantId, Transaction,
-    TransactionId,
+    Business, BusinessId, BusinessName, Customer, CustomerId, Relationship, RelationshipId, Tenant,
+    TenantId, Transaction, TransactionId,
 };
 
 use crate::error::RepositoryError;
@@ -122,4 +122,31 @@ pub trait TransactionRepository: Send + Sync {
         business_id: BusinessId,
         since: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<Transaction>, RepositoryError>> + Send;
+}
+
+/// Sama seperti `TransactionRepository`: tidak ada method keunikan apa
+/// pun di level ini. Pencegahan relationship duplikat (pasangan Customer
+/// + jenis yang sama) BELUM diimplementasikan.
+///
+/// Belum ada keputusan eksplisit soal itu (lihat catatan di
+/// `RelationshipService`).
+pub trait RelationshipRepository: Send + Sync {
+    fn find_by_id(
+        &self,
+        id: RelationshipId,
+    ) -> impl Future<Output = Result<Option<Relationship>, RepositoryError>> + Send;
+
+    fn save(
+        &self,
+        relationship: &Relationship,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    /// Sama seperti `TransactionRepository::find_updated_since_by_business`
+    /// — Relationship bernaung di bawah Business, bukan langsung di bawah
+    /// Tenant.
+    fn find_updated_since_by_business(
+        &self,
+        business_id: BusinessId,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Relationship>, RepositoryError>> + Send;
 }
