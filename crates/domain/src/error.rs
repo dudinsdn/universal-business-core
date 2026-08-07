@@ -31,6 +31,14 @@ pub enum DomainError {
         max: usize,
     },
     InvalidPhone,
+    /// `TransactionKind::new` dipanggil dengan string kosong.
+    EmptyTransactionKind,
+    TransactionKindTooLong {
+        max: usize,
+    },
+    InvalidTransactionKind,
+    /// `TransactionAmount::new` dipanggil dengan nilai <= 0.
+    InvalidAmount,
 }
 
 impl fmt::Display for DomainError {
@@ -77,6 +85,15 @@ impl fmt::Display for DomainError {
                 f,
                 "nomor telepon hanya boleh berisi angka, spasi, tanda +, -, ( atau )"
             ),
+            DomainError::EmptyTransactionKind => write!(f, "jenis transaksi tidak boleh kosong"),
+            DomainError::TransactionKindTooLong { max } => {
+                write!(f, "jenis transaksi tidak boleh lebih dari {max} karakter")
+            }
+            DomainError::InvalidTransactionKind => write!(
+                f,
+                "jenis transaksi hanya boleh berisi huruf, angka, underscore, atau hyphen"
+            ),
+            DomainError::InvalidAmount => write!(f, "nilai transaksi harus lebih besar dari nol"),
         }
     }
 }

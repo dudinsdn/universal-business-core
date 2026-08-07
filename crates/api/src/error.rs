@@ -33,7 +33,11 @@ impl IntoResponse for ApiError {
                 | DomainError::InvalidTimestamp
                 | DomainError::EmptyPhone
                 | DomainError::PhoneTooLong { .. }
-                | DomainError::InvalidPhone => StatusCode::BAD_REQUEST,
+                | DomainError::InvalidPhone
+                | DomainError::EmptyTransactionKind
+                | DomainError::TransactionKindTooLong { .. }
+                | DomainError::InvalidTransactionKind
+                | DomainError::InvalidAmount => StatusCode::BAD_REQUEST,
                 DomainError::DuplicateBusinessName
                 | DomainError::TenantHasActiveBusiness
                 | DomainError::TenantIsDeleted
