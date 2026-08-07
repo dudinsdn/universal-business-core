@@ -39,6 +39,16 @@ pub enum DomainError {
     InvalidTransactionKind,
     /// `TransactionAmount::new` dipanggil dengan nilai <= 0.
     InvalidAmount,
+    /// `RelationshipType::new` dipanggil dengan string kosong.
+    EmptyRelationshipType,
+    RelationshipTypeTooLong {
+        max: usize,
+    },
+    InvalidRelationshipType,
+    /// `Relationship::new`/`with_id` dipanggil dengan `from_customer_id`
+    /// sama dengan `to_customer_id` — Customer tidak bisa berelasi dengan
+    /// dirinya sendiri.
+    SelfRelationship,
 }
 
 impl fmt::Display for DomainError {
@@ -94,6 +104,19 @@ impl fmt::Display for DomainError {
                 "jenis transaksi hanya boleh berisi huruf, angka, underscore, atau hyphen"
             ),
             DomainError::InvalidAmount => write!(f, "nilai transaksi harus lebih besar dari nol"),
+            DomainError::EmptyRelationshipType => {
+                write!(f, "jenis hubungan tidak boleh kosong")
+            }
+            DomainError::RelationshipTypeTooLong { max } => {
+                write!(f, "jenis hubungan tidak boleh lebih dari {max} karakter")
+            }
+            DomainError::InvalidRelationshipType => write!(
+                f,
+                "jenis hubungan hanya boleh berisi huruf, angka, underscore, atau hyphen"
+            ),
+            DomainError::SelfRelationship => {
+                write!(f, "customer tidak bisa berelasi dengan dirinya sendiri")
+            }
         }
     }
 }

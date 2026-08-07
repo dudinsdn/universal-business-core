@@ -1,4 +1,4 @@
-//! Core Domain: Tenant, Business, Customer & Transaction.
+//! Core Domain: Tenant, Business, Customer, Transaction & Relationship.
 //!
 //! Modul ini murni domain logic:
 //! - Tidak bergantung pada framework, database, HTTP, atau UI.
@@ -10,6 +10,7 @@
 pub mod business;
 pub mod customer;
 pub mod error;
+pub mod relationship;
 pub mod rules;
 pub mod tenant;
 pub mod transaction;
@@ -17,5 +18,6 @@ pub mod transaction;
 pub use business::{Business, BusinessId, BusinessName, BusinessType};
 pub use customer::{Customer, CustomerId, CustomerName, CustomerPhone};
 pub use error::DomainError;
+pub use relationship::{Relationship, RelationshipId, RelationshipType};
 pub use tenant::{Tenant, TenantId, TenantName};
 pub use transaction::{Transaction, TransactionAmount, TransactionId, TransactionKind};

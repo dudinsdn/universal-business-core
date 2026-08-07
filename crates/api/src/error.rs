@@ -37,11 +37,15 @@ impl IntoResponse for ApiError {
                 | DomainError::EmptyTransactionKind
                 | DomainError::TransactionKindTooLong { .. }
                 | DomainError::InvalidTransactionKind
-                | DomainError::InvalidAmount => StatusCode::BAD_REQUEST,
+                | DomainError::InvalidAmount
+                | DomainError::EmptyRelationshipType
+                | DomainError::RelationshipTypeTooLong { .. }
+                | DomainError::InvalidRelationshipType => StatusCode::BAD_REQUEST,
                 DomainError::DuplicateBusinessName
                 | DomainError::TenantHasActiveBusiness
                 | DomainError::TenantIsDeleted
                 | DomainError::BusinessIsDeleted
+                | DomainError::SelfRelationship
                 | DomainError::VersionConflict => StatusCode::CONFLICT,
             },
             ApplicationError::TenantNotFound
