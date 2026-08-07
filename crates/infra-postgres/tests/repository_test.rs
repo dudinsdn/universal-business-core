@@ -12,12 +12,18 @@
 //! Butuh role Postgres dengan hak CREATEDB. Lihat instruksi setup di
 //! pesan pendamping.
 
-use application::{BusinessRepository, CustomerRepository, RepositoryError, TenantRepository};
+use application::{
+    BusinessRepository, CustomerRepository, RepositoryError, TenantRepository,
+    TransactionRepository,
+};
 use chrono::Utc;
 use domain::{
-    Business, BusinessName, BusinessType, Customer, CustomerName, CustomerPhone, Tenant, TenantName,
+    Business, BusinessName, BusinessType, Customer, CustomerName, CustomerPhone, Tenant,
+    TenantName, Transaction, TransactionAmount, TransactionKind,
 };
-use infra_postgres::{PgBusinessRepository, PgCustomerRepository, PgTenantRepository};
+use infra_postgres::{
+    PgBusinessRepository, PgCustomerRepository, PgTenantRepository, PgTransactionRepository,
+};
 use sqlx::PgPool;
 
 #[sqlx::test]
@@ -195,6 +201,229 @@ async fn find_updated_since_includes_soft_deleted_tenants(pool: PgPool) -> sqlx:
     repo.save(&tenant).await.unwrap();
 
     let changed = repo.find_updated_since(cursor).await.unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].is_deleted());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_and_find_transaction_roundtrips(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let transaction_repo = PgTransactionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko Baju").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+
+    let transaction = Transaction::new(
+        business.id(),
+        None,
+        TransactionKind::new("sale").unwrap(),
+        TransactionAmount::new(50_000).unwrap(),
+        Utc::now(),
+    );
+    transaction_repo.save(&transaction).await.unwrap();
+
+    let fetched = transaction_repo
+        .find_by_id(transaction.id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(fetched.id(), transaction.id());
+    assert_eq!(fetched.business_id(), business.id());
+    assert!(fetched.customer_id().is_none());
+    assert_eq!(fetched.kind().as_str(), "sale");
+    assert_eq!(fetched.amount().as_i64(), 50_000);
+    assert_eq!(fetched.version(), 0);
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_and_find_transaction_with_customer_roundtrips(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let transaction_repo = PgTransactionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko Baju").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let transaction = Transaction::new(
+        business.id(),
+        Some(customer.id()),
+        TransactionKind::new("sale").unwrap(),
+        TransactionAmount::new(25_000).unwrap(),
+        Utc::now(),
+    );
+    transaction_repo.save(&transaction).await.unwrap();
+
+    let fetched = transaction_repo
+        .find_by_id(transaction.id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(fetched.customer_id(), Some(customer.id()));
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_transaction_by_id_returns_none_when_not_found(pool: PgPool) -> sqlx::Result<()> {
+    let repo = PgTransactionRepository::new(pool);
+    let result = repo.find_by_id(domain::TransactionId::new()).await.unwrap();
+    assert!(result.is_none());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_transaction_detects_version_conflict_at_database_level(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let transaction_repo = PgTransactionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko Baju").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+
+    let mut transaction = Transaction::new(
+        business.id(),
+        None,
+        TransactionKind::new("sale").unwrap(),
+        TransactionAmount::new(10_000).unwrap(),
+        Utc::now(),
+    );
+    transaction_repo.save(&transaction).await.unwrap();
+
+    // Dua "pembaca" sama-sama mulai dari data versi 0.
+    let mut stale_copy = transaction.clone();
+
+    // Salah satu menang duluan: soft delete, jadi versi 1, berhasil
+    // disimpan.
+    transaction.soft_delete();
+    transaction_repo.save(&transaction).await.unwrap();
+
+    // Yang telat masih berdasarkan versi 0 saat mulai mutasi — mencoba
+    // soft delete juga (jadi versi 1 di sisinya sendiri), tapi versi 0 di
+    // penyimpanan sudah tidak ada lagi — harus ditolak DB, bukan cuma
+    // tertimpa diam-diam.
+    stale_copy.soft_delete();
+    let result = transaction_repo.save(&stale_copy).await;
+
+    assert!(matches!(result, Err(RepositoryError::VersionConflict)));
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_excludes_other_business_for_transaction(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let transaction_repo = PgTransactionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+
+    let business_a = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko A").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    let business_b = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko B").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business_a).await.unwrap();
+    business_repo.save(&business_b).await.unwrap();
+
+    let transaction_a = Transaction::new(
+        business_a.id(),
+        None,
+        TransactionKind::new("sale").unwrap(),
+        TransactionAmount::new(10_000).unwrap(),
+        Utc::now(),
+    );
+    let transaction_b = Transaction::new(
+        business_b.id(),
+        None,
+        TransactionKind::new("sale").unwrap(),
+        TransactionAmount::new(10_000).unwrap(),
+        Utc::now(),
+    );
+    transaction_repo.save(&transaction_a).await.unwrap();
+    transaction_repo.save(&transaction_b).await.unwrap();
+
+    let epoch = chrono::DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+    let changed = transaction_repo
+        .find_updated_since_by_business(business_a.id(), epoch)
+        .await
+        .unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].id(), transaction_a.id());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_includes_soft_deleted_transactions(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let transaction_repo = PgTransactionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko Baju").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+
+    let mut transaction = Transaction::new(
+        business.id(),
+        None,
+        TransactionKind::new("sale").unwrap(),
+        TransactionAmount::new(10_000).unwrap(),
+        Utc::now(),
+    );
+    transaction_repo.save(&transaction).await.unwrap();
+
+    let cursor = Utc::now();
+
+    // Client offline harus tahu soal penghapusan juga.
+    transaction.soft_delete();
+    transaction_repo.save(&transaction).await.unwrap();
+
+    let changed = transaction_repo
+        .find_updated_since_by_business(business.id(), cursor)
+        .await
+        .unwrap();
 
     assert_eq!(changed.len(), 1);
     assert!(changed[0].is_deleted());

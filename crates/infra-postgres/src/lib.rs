@@ -1,10 +1,12 @@
 pub mod business_repository;
 pub mod customer_repository;
 pub mod tenant_repository;
+pub mod transaction_repository;
 
 pub use business_repository::PgBusinessRepository;
 pub use customer_repository::PgCustomerRepository;
 pub use tenant_repository::PgTenantRepository;
+pub use transaction_repository::PgTransactionRepository;
 
 /// Menjalankan migration di folder `migrations/` (di-embed saat compile
 /// lewat `sqlx::migrate!`, bukan dibaca dari disk saat runtime — supaya

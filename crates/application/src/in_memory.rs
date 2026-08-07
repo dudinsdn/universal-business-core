@@ -433,17 +433,17 @@ mod tests {
         repo.save(&transaction).await.unwrap();
 
         // Dua "pembaca" sama-sama mulai dari data versi 0.
-        let stale_copy = transaction.clone();
+        let mut stale_copy = transaction.clone();
 
         // Salah satu menang duluan: soft delete, jadi versi 1, berhasil
         // disimpan.
         transaction.soft_delete();
         repo.save(&transaction).await.unwrap();
 
-        // Yang satu lagi telat: masih berdasarkan data versi 0. Simulasikan
-        // konflik dengan menyimpan ulang salinan basi ini (tanpa perubahan
-        // apa pun juga cukup untuk memicu conflict karena versinya sudah
-        // tertinggal di penyimpanan).
+        // Yang telat masih berdasarkan versi 0 saat mulai mutasi — mencoba
+        // soft delete juga (jadi versi 1 di sisinya sendiri), tapi versi 0 di
+        // penyimpanan sudah tidak ada lagi — harus ditolak sebagai conflict.
+        stale_copy.soft_delete();
         let result = repo.save(&stale_copy).await;
 
         assert_eq!(result, Err(RepositoryError::VersionConflict));
