@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
 # Smoke test seluruh endpoint API Universal Business Core.
+#
 # Jalankan server dulu di terminal lain:
 #   DATABASE_URL="postgres://..." cargo run -p api
-# Lalu jalankan skrip ini: bash smoke_test.sh
+#
+# Lalu:
+#   bash smoke_test.sh
+#
+# Cakupan:
+# - Tenant: CRUD, soft delete, optimistic locking, idempotency, sync
+# - Business: create/update/delete, duplicate name, optimistic locking,
+#             idempotency, soft delete, sync
+# - Customer: create, rename, phone update/clear, optimistic locking,
+#             idempotency, soft delete, sync
+# - Transaction: create, customer link, validation, idempotency,
+#                soft delete, sync
 
 set -uo pipefail
-BASE="http://localhost:3000"
+
+BASE="${BASE:-http://localhost:3000}"
 PASS=0
 FAIL=0
+BODY="/tmp/ubc_smoke_test_body.json"
 
-# Pra-syarat: tanpa ini, error di tengah jalan (mis. TENANT_ID kosong)
-# jadi susah dibedakan dari kegagalan server sungguhan.
 command -v curl >/dev/null || {
   echo "curl tidak ditemukan"
   exit 1
@@ -20,26 +32,32 @@ command -v python3 >/dev/null || {
   exit 1
 }
 
+cleanup() {
+  rm -f "$BODY"
+}
+trap cleanup EXIT
+
 check() {
   local desc="$1" expected="$2" actual="$3"
+
   if [ "$actual" = "$expected" ]; then
     echo "PASS  $desc (status $actual)"
     PASS=$((PASS + 1))
   else
     echo "FAIL  $desc — expected $expected, dapat $actual"
-    echo "      body: $(cat /tmp/last_body.json 2>/dev/null)"
+    echo "      body: $(cat "$BODY" 2>/dev/null)"
     FAIL=$((FAIL + 1))
   fi
 }
 
-# check_contains FIELD SUBSTRING DESC -> cek satu field JSON di
-# /tmp/last_body.json mengandung substring tertentu. Dipakai untuk
-# memastikan 400/409 gagal karena ALASAN yang benar, bukan cuma status
-# code yang kebetulan cocok.
 check_contains() {
   local field="$1" substring="$2" desc="$3"
   local actual
-  actual=$(python3 -c "import json;print(json.load(open('/tmp/last_body.json')).get('$field',''))" 2>/dev/null)
+
+  actual=$(python3 -c \
+    "import json; print(json.load(open('$BODY')).get('$field',''))" \
+    2>/dev/null)
+
   if [[ "$actual" == *"$substring"* ]]; then
     echo "PASS  $desc (mengandung \"$substring\")"
     PASS=$((PASS + 1))
@@ -49,203 +67,473 @@ check_contains() {
   fi
 }
 
-req() {
-  # req METHOD PATH JSON_BODY -> cetak status code, isi body ke /tmp/last_body.json
-  local method="$1" path="$2" body="${3:-}"
-  if [ -n "$body" ]; then
-    curl -s -o /tmp/last_body.json -w "%{http_code}" -X "$method" "$BASE$path" \
-      -H 'content-type: application/json' -d "$body"
+check_json_field() {
+  local field="$1" expected="$2" desc="$3"
+  local actual
+
+  actual=$(python3 -c \
+    "import json; print(json.load(open('$BODY'))['$field'])" \
+    2>/dev/null)
+
+  if [ "$actual" = "$expected" ]; then
+    echo "PASS  $desc"
+    PASS=$((PASS + 1))
   else
-    curl -s -o /tmp/last_body.json -w "%{http_code}" -X "$method" "$BASE$path"
+    echo "FAIL  $desc — expected \"$expected\", dapat \"$actual\""
+    FAIL=$((FAIL + 1))
   fi
 }
 
-echo "=== 1. Create tenant (valid) ==="
+json_value() {
+  local field="$1"
+  python3 -c \
+    "import json; print(json.load(open('$BODY'))['$field'])" \
+    2>/dev/null
+}
+
+req() {
+  # req METHOD PATH [JSON_BODY]
+  # Mengembalikan HTTP status dan menyimpan body ke $BODY.
+  local method="$1"
+  local path="$2"
+  local body="${3:-}"
+
+  if [ -n "$body" ]; then
+    curl -sS -o "$BODY" -w "%{http_code}" \
+      -X "$method" "$BASE$path" \
+      -H 'content-type: application/json' \
+      -d "$body"
+  else
+    curl -sS -o "$BODY" -w "%{http_code}" \
+      -X "$method" "$BASE$path"
+  fi
+}
+
+contains_id() {
+  local id="$1"
+
+  python3 - "$id" <<'PY'
+import json
+import sys
+
+wanted = sys.argv[1]
+
+try:
+    data = json.load(open("/tmp/ubc_smoke_test_body.json"))
+    print("yes" if any(item.get("id") == wanted for item in data) else "no")
+except Exception:
+    print("no")
+PY
+}
+
+deleted_id_is_true() {
+  local id="$1"
+
+  python3 - "$id" <<'PY'
+import json
+import sys
+
+wanted = sys.argv[1]
+
+try:
+    data = json.load(open("/tmp/ubc_smoke_test_body.json"))
+    match = [item for item in data if item.get("id") == wanted]
+    print("yes" if match and match[0].get("is_deleted") is True else "no")
+except Exception:
+    print("no")
+PY
+}
+
+assert_yes() {
+  local value="$1" desc="$2"
+
+  if [ "$value" = "yes" ]; then
+    echo "PASS  $desc"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL  $desc"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+echo "=========================================="
+echo "Universal Business Core — Smoke Test"
+echo "BASE=$BASE"
+echo "=========================================="
+
+echo
+echo "=== 1. TENANT ==="
+
+echo "--- Create tenant valid ---"
 STATUS=$(req POST /tenants '{"name":"Tenant Smoke Test"}')
 check "POST /tenants valid" 201 "$STATUS"
-
-TENANT_ID=$(python3 -c "import json;print(json.load(open('/tmp/last_body.json'))['id'])" 2>/dev/null)
+TENANT_ID=$(json_value id)
 echo "  tenant_id = $TENANT_ID"
 
-echo "=== 2. Create tenant (nama kosong -> 400) ==="
+echo "--- Create tenant nama kosong ---"
 STATUS=$(req POST /tenants '{"name":"   "}')
-check "POST /tenants nama kosong" 400 "$STATUS"
+check "POST /tenants nama kosong -> 400" 400 "$STATUS"
 check_contains "error" "kosong" "pesan error nama kosong"
 
-echo "=== 3. Get tenant (valid) ==="
+echo "--- Get tenant valid ---"
 STATUS=$(req GET "/tenants/$TENANT_ID")
 check "GET /tenants/{id}" 200 "$STATUS"
 
-echo "=== 4. Get tenant (tidak ditemukan -> 404) ==="
+echo "--- Get tenant tidak ditemukan ---"
 STATUS=$(req GET "/tenants/00000000-0000-0000-0000-000000000000")
 check "GET /tenants/{id-random} -> 404" 404 "$STATUS"
 
-echo "=== 5. Get tenant (id tidak valid -> 400) ==="
+echo "--- Get tenant id invalid ---"
 STATUS=$(req GET "/tenants/bukan-uuid")
 check "GET /tenants/{id-invalid} -> 400" 400 "$STATUS"
 
-echo "=== 6. Rename tenant (versi benar) ==="
-STATUS=$(req PATCH "/tenants/$TENANT_ID" '{"name":"Tenant Smoke Test Baru","expected_version":0}')
+echo "--- Rename tenant versi benar ---"
+STATUS=$(req PATCH "/tenants/$TENANT_ID" \
+  '{"name":"Tenant Smoke Test Baru","expected_version":0}')
 check "PATCH /tenants/{id} versi benar" 200 "$STATUS"
 
-echo "=== 7. Rename tenant (versi basi -> 409) ==="
-STATUS=$(req PATCH "/tenants/$TENANT_ID" '{"name":"Tenant Telat","expected_version":0}')
+echo "--- Rename tenant versi basi ---"
+STATUS=$(req PATCH "/tenants/$TENANT_ID" \
+  '{"name":"Tenant Telat","expected_version":0}')
 check "PATCH /tenants/{id} versi basi -> 409" 409 "$STATUS"
+check_contains "error" "versi" "pesan error optimistic locking tenant"
 
-echo "=== 8. Create business (valid) ==="
-STATUS=$(req POST "/tenants/$TENANT_ID/businesses" '{"name":"Toko Baju","business_type":"retail"}')
+echo
+echo "=== 2. BUSINESS ==="
+
+echo "--- Create business valid ---"
+STATUS=$(req POST "/tenants/$TENANT_ID/businesses" \
+  '{"name":"Toko Baju","business_type":"retail"}')
 check "POST /tenants/{id}/businesses valid" 201 "$STATUS"
-
-BUSINESS_ID=$(python3 -c "import json;print(json.load(open('/tmp/last_body.json'))['id'])" 2>/dev/null)
+BUSINESS_ID=$(json_value id)
 echo "  business_id = $BUSINESS_ID"
 
-echo "=== 9. Create business (nama duplikat -> 409) ==="
-STATUS=$(req POST "/tenants/$TENANT_ID/businesses" '{"name":"Toko Baju","business_type":"retail"}')
+echo "--- Create business nama duplikat ---"
+STATUS=$(req POST "/tenants/$TENANT_ID/businesses" \
+  '{"name":"Toko Baju","business_type":"retail"}')
 check "POST .../businesses nama duplikat -> 409" 409 "$STATUS"
 check_contains "error" "nama business" "pesan error nama business duplikat"
 
-echo "=== 10. Create business (tenant tidak ditemukan -> 404) ==="
-STATUS=$(req POST "/tenants/00000000-0000-0000-0000-000000000000/businesses" '{"name":"X","business_type":"retail"}')
+echo "--- Create business tenant tidak ditemukan ---"
+STATUS=$(req POST \
+  "/tenants/00000000-0000-0000-0000-000000000000/businesses" \
+  '{"name":"X","business_type":"retail"}')
 check "POST .../businesses tenant tidak ada -> 404" 404 "$STATUS"
 
-echo "=== 11. Rename business (versi benar) ==="
-STATUS=$(req PATCH "/businesses/$BUSINESS_ID" '{"name":"Toko Baju Baru","expected_version":0}')
+echo "--- Rename business versi benar ---"
+STATUS=$(req PATCH "/businesses/$BUSINESS_ID" \
+  '{"name":"Toko Baju Baru","expected_version":0}')
 check "PATCH /businesses/{id} versi benar" 200 "$STATUS"
 
-echo "=== 12. Rename business (versi basi -> 409) ==="
-STATUS=$(req PATCH "/businesses/$BUSINESS_ID" '{"name":"Telat","expected_version":0}')
+echo "--- Rename business versi basi ---"
+STATUS=$(req PATCH "/businesses/$BUSINESS_ID" \
+  '{"name":"Telat","expected_version":0}')
 check "PATCH /businesses/{id} versi basi -> 409" 409 "$STATUS"
 
-echo "=== 13. Delete tenant selagi business masih aktif -> 409 ==="
-STATUS=$(req DELETE "/tenants/$TENANT_ID" '{"expected_version":1}')
-check "DELETE /tenants/{id} dengan business aktif -> 409" 409 "$STATUS"
+echo
+echo "=== 3. CUSTOMER ==="
 
-echo "=== 14. Delete business (versi benar) -> 204 ==="
-STATUS=$(req DELETE "/businesses/$BUSINESS_ID" '{"expected_version":1}')
-check "DELETE /businesses/{id} -> 204" 204 "$STATUS"
+echo "--- Create customer valid + phone ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
+  '{"name":"Budi Santoso","phone":"081234567890"}')
+check "POST /businesses/{id}/customers valid" 201 "$STATUS"
+CUSTOMER_ID=$(json_value id)
+echo "  customer_id = $CUSTOMER_ID"
 
-echo "=== 15. Delete tenant setelah business dihapus -> 204 ==="
-STATUS=$(req DELETE "/tenants/$TENANT_ID" '{"expected_version":1}')
-check "DELETE /tenants/{id} -> 204" 204 "$STATUS"
+check_json_field "phone" "081234567890" \
+  "customer menyimpan nomor telepon"
 
-echo "=== 16. Get tenant setelah dihapus (soft delete, tetap 200, is_deleted true) ==="
-STATUS=$(req GET "/tenants/$TENANT_ID")
-check "GET /tenants/{id} setelah dihapus -> 200" 200 "$STATUS"
+echo "--- Create customer nama kosong ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
+  '{"name":"   "}')
+check "POST customer nama kosong -> 400" 400 "$STATUS"
+check_contains "error" "kosong" "pesan error nama customer kosong"
 
-IS_DELETED=$(python3 -c "import json;print(json.load(open('/tmp/last_body.json'))['is_deleted'])" 2>/dev/null)
-if [ "$IS_DELETED" = "True" ]; then
-  echo "PASS  is_deleted true setelah delete"
-  PASS=$((PASS + 1))
-else
-  echo "FAIL  is_deleted seharusnya true, dapat: $IS_DELETED"
-  FAIL=$((FAIL + 1))
-fi
+echo "--- Create customer phone invalid ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
+  '{"name":"Customer Invalid Phone","phone":"abc"}')
+check "POST customer phone invalid -> 400" 400 "$STATUS"
+
+echo "--- Rename customer versi benar ---"
+STATUS=$(req PATCH "/customers/$CUSTOMER_ID" \
+  '{"name":"Budi Santoso Baru","expected_version":0}')
+check "PATCH /customers/{id} versi benar" 200 "$STATUS"
+
+echo "--- Rename customer versi basi ---"
+STATUS=$(req PATCH "/customers/$CUSTOMER_ID" \
+  '{"name":"Budi Telat","expected_version":0}')
+check "PATCH /customers/{id} versi basi -> 409" 409 "$STATUS"
+check_contains "error" "versi" "pesan error optimistic locking customer"
+
+echo "--- Update phone versi benar ---"
+STATUS=$(req PATCH "/customers/$CUSTOMER_ID/phone" \
+  '{"phone":"081298765432","expected_version":1}')
+check "PATCH /customers/{id}/phone versi benar" 200 "$STATUS"
+check_json_field "phone" "081298765432" \
+  "nomor telepon customer berhasil diubah"
+
+echo "--- Update phone versi basi ---"
+STATUS=$(req PATCH "/customers/$CUSTOMER_ID/phone" \
+  '{"phone":"081211111111","expected_version":1}')
+check "PATCH /customers/{id}/phone versi basi -> 409" 409 "$STATUS"
+
+echo "--- Clear phone ---"
+STATUS=$(req PATCH "/customers/$CUSTOMER_ID/phone" \
+  '{"phone":null,"expected_version":2}')
+check "PATCH /customers/{id}/phone null -> 200" 200 "$STATUS"
+check_json_field "phone" "None" \
+  "nomor telepon customer berhasil dihapus"
+
+echo
+echo "=== 4. TRANSACTION ==="
+
+echo "--- Create transaction linked customer ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
+  '{
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "kind":"sale",
+    "amount":50000,
+    "occurred_at":"2026-08-08T00:00:00Z"
+  }')
+check "POST /businesses/{id}/transactions valid" 201 "$STATUS"
+TRANSACTION_ID=$(json_value id)
+echo "  transaction_id = $TRANSACTION_ID"
+
+check_json_field "kind" "sale" \
+  "transaction kind tersimpan sebagai lowercase"
+check_json_field "amount" "50000" \
+  "transaction amount tersimpan"
+check_json_field "customer_id" "$CUSTOMER_ID" \
+  "transaction terhubung ke customer"
+
+echo "--- Create transaction kind kosong ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
+  '{"kind":"   ","amount":10000}')
+check "POST transaction kind kosong -> 400" 400 "$STATUS"
+
+echo "--- Create transaction kind invalid ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
+  '{"kind":"sale online","amount":10000}')
+check "POST transaction kind invalid -> 400" 400 "$STATUS"
+
+echo "--- Create transaction amount nol ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
+  '{"kind":"sale","amount":0}')
+check "POST transaction amount 0 -> 400" 400 "$STATUS"
+check_contains "error" "lebih besar dari nol" \
+  "pesan error amount tidak valid"
+
+echo "--- Create transaction amount negatif ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
+  '{"kind":"sale","amount":-1}')
+check "POST transaction amount negatif -> 400" 400 "$STATUS"
+
+echo
+echo "=== 5. IDEMPOTENCY ==="
 
 IDEMP_TENANT=$(python3 -c 'import uuid; print(uuid.uuid4())')
 echo "  idemp_tenant_id = $IDEMP_TENANT"
 
-echo "=== 17. Idempotent create tenant ==="
-STATUS=$(req POST /tenants "{\"id\":\"$IDEMP_TENANT\",\"name\":\"Tenant Idempotent\"}")
-check "POST tenant pertama" 201 "$STATUS"
+STATUS=$(req POST /tenants \
+  '{"id":"'"$IDEMP_TENANT"'","name":"Tenant Idempotent"}')
+check "POST tenant idempotent pertama" 201 "$STATUS"
 
-STATUS=$(req POST /tenants "{\"id\":\"$IDEMP_TENANT\",\"name\":\"Tenant Berbeda\"}")
+STATUS=$(req POST /tenants \
+  '{"id":"'"$IDEMP_TENANT"'","name":"Tenant Berbeda"}')
 check "POST tenant retry -> 200" 200 "$STATUS"
+check_json_field "name" "Tenant Idempotent" \
+  "retry tenant mengembalikan entity pertama"
 
 IDEMP_BUSINESS=$(python3 -c 'import uuid; print(uuid.uuid4())')
-echo "  idemp_business_id = $IDEMP_BUSINESS"
-
-echo "=== 18. Idempotent create business ==="
-STATUS=$(req POST "/tenants/$IDEMP_TENANT/businesses" \
-  "{\"id\":\"$IDEMP_BUSINESS\",\"name\":\"Bisnis Idem\",\"business_type\":\"retail\"}")
-check "POST business pertama" 201 "$STATUS"
 
 STATUS=$(req POST "/tenants/$IDEMP_TENANT/businesses" \
-  "{\"id\":\"$IDEMP_BUSINESS\",\"name\":\"Nama Baru\",\"business_type\":\"retail\"}")
+  '{"id":"'"$IDEMP_BUSINESS"'","name":"Bisnis Idem","business_type":"retail"}')
+check "POST business idempotent pertama" 201 "$STATUS"
+
+STATUS=$(req POST "/tenants/$IDEMP_TENANT/businesses" \
+  '{"id":"'"$IDEMP_BUSINESS"'","name":"Nama Baru","business_type":"retail"}')
 check "POST business retry -> 200" 200 "$STATUS"
+check_json_field "name" "Bisnis Idem" \
+  "retry business mengembalikan entity pertama"
 
-echo "=== 19. Full sync tenants ==="
+IDEMP_CUSTOMER=$(python3 -c 'import uuid; print(uuid.uuid4())')
+
+STATUS=$(req POST "/tenants/$IDEMP_TENANT/businesses" \
+  '{"name":"Bisnis Customer Idem","business_type":"retail"}')
+check "POST business untuk customer idempotency" 201 "$STATUS"
+IDEMP_BUSINESS_FOR_CUSTOMER=$(json_value id)
+
+STATUS=$(req POST "/businesses/$IDEMP_BUSINESS_FOR_CUSTOMER/customers" \
+  '{"id":"'"$IDEMP_CUSTOMER"'","name":"Customer Idem","phone":"081234567890"}')
+check "POST customer idempotent pertama" 201 "$STATUS"
+
+STATUS=$(req POST "/businesses/$IDEMP_BUSINESS_FOR_CUSTOMER/customers" \
+  '{"id":"'"$IDEMP_CUSTOMER"'","name":"Customer Berbeda"}')
+check "POST customer retry -> 200" 200 "$STATUS"
+check_json_field "name" "Customer Idem" \
+  "retry customer mengembalikan entity pertama"
+
+IDEMP_TRANSACTION=$(python3 -c 'import uuid; print(uuid.uuid4())')
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
+  '{"id":"'"$IDEMP_TRANSACTION"'","kind":"sale","amount":100000}')
+check "POST transaction idempotent pertama" 201 "$STATUS"
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
+  '{"id":"'"$IDEMP_TRANSACTION"'","kind":"sale","amount":999999}')
+check "POST transaction retry -> 200" 200 "$STATUS"
+check_json_field "amount" "100000" \
+  "retry transaction mengembalikan amount pertama"
+
+echo
+echo "=== 6. SYNC TENANT ==="
+
 STATUS=$(req GET "/tenants")
 check "GET /tenants full sync" 200 "$STATUS"
 
-echo "=== 20. Invalid updated_since ==="
 STATUS=$(req GET "/tenants?updated_since=bukan-timestamp")
 check "GET /tenants invalid timestamp -> 400" 400 "$STATUS"
-check_contains "error" "RFC 3339" "pesan error format waktu"
+check_contains "error" "RFC 3339" \
+  "pesan error timestamp tenant"
 
 CURSOR=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 sleep 1
 
-echo "=== 21. Tenant Baru Setelah Cursor ==="
 STATUS=$(req POST /tenants '{"name":"Tenant Setelah Cursor"}')
-check "POST tenant baru" 201 "$STATUS"
+check "POST tenant setelah cursor" 201 "$STATUS"
+CURSOR_TENANT_ID=$(json_value id)
 
-CURSOR_TENANT_ID=$(python3 -c "import json;print(json.load(open('/tmp/last_body.json'))['id'])" 2>/dev/null)
-echo "  cursor_tenant_id = $CURSOR_TENANT_ID"
-
-echo "=== 22. Valid updated_since ==="
 STATUS=$(req GET "/tenants?updated_since=$CURSOR")
 check "GET incremental tenant" 200 "$STATUS"
+assert_yes "$(contains_id "$CURSOR_TENANT_ID")" \
+  "tenant baru muncul pada incremental sync"
 
-# Bukan cuma status 200 — pastikan filternya benar: tenant yang dibuat
-# SEBELUM cursor tidak boleh ikut nyempil, dan yang SESUDAH cursor wajib ada.
-FOUND=$(python3 -c "
-import json
-ids = [t['id'] for t in json.load(open('/tmp/last_body.json'))]
-print('yes' if '$CURSOR_TENANT_ID' in ids else 'no')
-" 2>/dev/null)
-if [ "$FOUND" = "yes" ]; then
-  echo "PASS  tenant baru muncul di hasil incremental sync"
-  PASS=$((PASS + 1))
-else
-  echo "FAIL  tenant baru TIDAK muncul di hasil incremental sync (filter updated_since salah?)"
-  FAIL=$((FAIL + 1))
-fi
+echo
+echo "=== 7. SYNC BUSINESS ==="
 
-echo "=== 23. Full sync businesses ==="
 STATUS=$(req GET "/tenants/$IDEMP_TENANT/businesses")
 check "GET businesses full sync" 200 "$STATUS"
 
-echo "=== 24. Invalid timestamp businesses ==="
 STATUS=$(req GET "/tenants/$IDEMP_TENANT/businesses?updated_since=abc")
 check "GET businesses invalid timestamp -> 400" 400 "$STATUS"
 
 CURSOR=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 sleep 1
 
-echo "=== 25. Business Baru Setelah Cursor ==="
 STATUS=$(req POST "/tenants/$IDEMP_TENANT/businesses" \
-  '{"name":"Sync Test","business_type":"retail"}')
-check "POST business baru" 201 "$STATUS"
+  '{"name":"Sync Business","business_type":"retail"}')
+check "POST business setelah cursor" 201 "$STATUS"
+SYNC_BUSINESS_ID=$(json_value id)
 
-SYNC_BUSINESS_ID=$(python3 -c "import json;print(json.load(open('/tmp/last_body.json'))['id'])" 2>/dev/null)
-echo " sync_business_id = $SYNC_BUSINESS_ID"
-
-STATUS=$(req GET "/tenants/$IDEMP_TENANT/businesses?updated_since=$CURSOR")
+STATUS=$(req GET \
+  "/tenants/$IDEMP_TENANT/businesses?updated_since=$CURSOR")
 check "GET incremental businesses" 200 "$STATUS"
+assert_yes "$(contains_id "$SYNC_BUSINESS_ID")" \
+  "business baru muncul pada incremental sync"
 
-STATUS=$(req DELETE "/businesses/$SYNC_BUSINESS_ID" '{"expected_version":0}')
-check "DELETE business" 204 "$STATUS"
+STATUS=$(req DELETE "/businesses/$SYNC_BUSINESS_ID" \
+  '{"expected_version":0}')
+check "DELETE business -> 204" 204 "$STATUS"
 
 STATUS=$(req GET "/tenants/$IDEMP_TENANT/businesses")
-check "GET businesses setelah delete" 200 "$STATUS"
+check "GET businesses setelah soft delete" 200 "$STATUS"
+assert_yes "$(deleted_id_is_true "$SYNC_BUSINESS_ID")" \
+  "business soft-deleted tetap muncul dengan is_deleted=true"
 
-# Business yang di-soft-delete harus tetap muncul (bukan hilang) dan
-# ditandai is_deleted=true — ini kontrak penting untuk client offline.
-SOFT_DELETED_OK=$(python3 -c "
-import json
-items = json.load(open('/tmp/last_body.json'))
-match = [b for b in items if b['id'] == '$SYNC_BUSINESS_ID']
-print('yes' if match and match[0]['is_deleted'] else 'no')
-" 2>/dev/null)
-if [ "$SOFT_DELETED_OK" = "yes" ]; then
-  echo "PASS  business soft-deleted tetap muncul dengan is_deleted=true"
-  PASS=$((PASS + 1))
-else
-  echo "FAIL  business soft-deleted seharusnya tetap muncul dengan is_deleted=true"
-  FAIL=$((FAIL + 1))
-fi
+echo
+echo "=== 8. SYNC CUSTOMER ==="
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/customers")
+check "GET customers full sync" 200 "$STATUS"
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/customers?updated_since=abc")
+check "GET customers invalid timestamp -> 400" 400 "$STATUS"
+
+CURSOR=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+sleep 1
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
+  '{"name":"Customer Sync Test","phone":"081200000000"}')
+check "POST customer setelah cursor" 201 "$STATUS"
+SYNC_CUSTOMER_ID=$(json_value id)
+
+STATUS=$(req GET \
+  "/businesses/$BUSINESS_ID/customers?updated_since=$CURSOR")
+check "GET incremental customers" 200 "$STATUS"
+assert_yes "$(contains_id "$SYNC_CUSTOMER_ID")" \
+  "customer baru muncul pada incremental sync"
+
+STATUS=$(req DELETE "/customers/$SYNC_CUSTOMER_ID" \
+  '{"expected_version":0}')
+check "DELETE customer -> 204" 204 "$STATUS"
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/customers")
+check "GET customers setelah soft delete" 200 "$STATUS"
+assert_yes "$(deleted_id_is_true "$SYNC_CUSTOMER_ID")" \
+  "customer soft-deleted tetap muncul dengan is_deleted=true"
+
+echo
+echo "=== 9. SYNC TRANSACTION ==="
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/transactions")
+check "GET transactions full sync" 200 "$STATUS"
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/transactions?updated_since=abc")
+check "GET transactions invalid timestamp -> 400" 400 "$STATUS"
+
+CURSOR=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+sleep 1
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
+  '{"kind":"sale","amount":75000,"occurred_at":"2026-08-08T01:00:00Z"}')
+check "POST transaction setelah cursor" 201 "$STATUS"
+SYNC_TRANSACTION_ID=$(json_value id)
+
+STATUS=$(req GET \
+  "/businesses/$BUSINESS_ID/transactions?updated_since=$CURSOR")
+check "GET incremental transactions" 200 "$STATUS"
+assert_yes "$(contains_id "$SYNC_TRANSACTION_ID")" \
+  "transaction baru muncul pada incremental sync"
+
+STATUS=$(req DELETE "/transactions/$SYNC_TRANSACTION_ID" \
+  '{"expected_version":0}')
+check "DELETE transaction -> 204" 204 "$STATUS"
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/transactions")
+check "GET transactions setelah soft delete" 200 "$STATUS"
+assert_yes "$(deleted_id_is_true "$SYNC_TRANSACTION_ID")" \
+  "transaction soft-deleted tetap muncul dengan is_deleted=true"
+
+echo
+echo "=== 10. SOFT DELETE / OPTIMISTIC LOCKING ==="
+
+echo "--- Business aktif tidak boleh menghapus tenant ---"
+STATUS=$(req DELETE "/tenants/$TENANT_ID" \
+  '{"expected_version":1}')
+check "DELETE tenant dengan business aktif -> 409" 409 "$STATUS"
+
+echo "--- Delete business utama ---"
+STATUS=$(req DELETE "/businesses/$BUSINESS_ID" \
+  '{"expected_version":1}')
+check "DELETE /businesses/{id} -> 204" 204 "$STATUS"
+
+echo "--- Tenant setelah business dihapus ---"
+STATUS=$(req DELETE "/tenants/$TENANT_ID" \
+  '{"expected_version":1}')
+check "DELETE /tenants/{id} -> 204" 204 "$STATUS"
+
+STATUS=$(req GET "/tenants/$TENANT_ID")
+check "GET tenant setelah soft delete -> 200" 200 "$STATUS"
+check_json_field "is_deleted" "True" \
+  "tenant ditandai is_deleted=true"
 
 echo
 echo "=========================================="
 echo "Hasil: $PASS PASS, $FAIL FAIL"
 echo "=========================================="
+
+if [ "$FAIL" -eq 0 ]; then
+  exit 0
+else
+  exit 1
+fi
