@@ -12,10 +12,12 @@
 //! Butuh role Postgres dengan hak CREATEDB. Lihat instruksi setup di
 //! pesan pendamping.
 
-use application::{BusinessRepository, RepositoryError, TenantRepository};
+use application::{BusinessRepository, CustomerRepository, RepositoryError, TenantRepository};
 use chrono::Utc;
-use domain::{Business, BusinessName, BusinessType, Tenant, TenantName};
-use infra_postgres::{PgBusinessRepository, PgTenantRepository};
+use domain::{
+    Business, BusinessName, BusinessType, Customer, CustomerName, CustomerPhone, Tenant, TenantName,
+};
+use infra_postgres::{PgBusinessRepository, PgCustomerRepository, PgTenantRepository};
 use sqlx::PgPool;
 
 #[sqlx::test]
@@ -230,5 +232,157 @@ async fn find_updated_since_by_tenant_excludes_other_tenants(pool: PgPool) -> sq
 
     assert_eq!(changed.len(), 1);
     assert_eq!(changed[0].id(), business_a.id());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_and_find_customer_roundtrips(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko Baju").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+
+    let customer = Customer::new(
+        business.id(),
+        CustomerName::new("Budi").unwrap(),
+        Some(CustomerPhone::new("081234567890").unwrap()),
+    );
+    customer_repo.save(&customer).await.unwrap();
+
+    let fetched = customer_repo
+        .find_by_id(customer.id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(fetched.id(), customer.id());
+    assert_eq!(fetched.name().as_str(), "Budi");
+    assert_eq!(fetched.phone().unwrap().as_str(), "081234567890");
+    assert_eq!(fetched.version(), 0);
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_customer_by_id_returns_none_when_not_found(pool: PgPool) -> sqlx::Result<()> {
+    let repo = PgCustomerRepository::new(pool);
+    let result = repo.find_by_id(domain::CustomerId::new()).await.unwrap();
+    assert!(result.is_none());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_customer_detects_version_conflict_at_database_level(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko Baju").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+
+    let mut customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    // Dua "pembaca" sama-sama mulai dari data versi 0.
+    let mut stale_copy = customer.clone();
+
+    customer.rename(CustomerName::new("Budi Santoso").unwrap());
+    customer_repo.save(&customer).await.unwrap();
+
+    // Yang telat masih berdasarkan versi 0 — harus ditolak DB.
+    stale_copy.rename(CustomerName::new("Budi Telat").unwrap());
+    let result = customer_repo.save(&stale_copy).await;
+
+    assert!(matches!(result, Err(RepositoryError::VersionConflict)));
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_excludes_other_business(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+
+    let business_a = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko A").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    let business_b = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko B").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business_a).await.unwrap();
+    business_repo.save(&business_b).await.unwrap();
+
+    let customer_a = Customer::new(business_a.id(), CustomerName::new("Budi").unwrap(), None);
+    let customer_b = Customer::new(business_b.id(), CustomerName::new("Siti").unwrap(), None);
+    customer_repo.save(&customer_a).await.unwrap();
+    customer_repo.save(&customer_b).await.unwrap();
+
+    let epoch = chrono::DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+    let changed = customer_repo
+        .find_updated_since_by_business(business_a.id(), epoch)
+        .await
+        .unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].id(), customer_a.id());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_includes_soft_deleted_customers(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Toko Baju").unwrap(),
+        BusinessType::new("retail").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+
+    let mut customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let cursor = Utc::now();
+
+    // Client offline harus tahu soal penghapusan juga, bukan cuma
+    // perubahan pada entity yang masih aktif.
+    customer.soft_delete();
+    customer_repo.save(&customer).await.unwrap();
+
+    let changed = customer_repo
+        .find_updated_since_by_business(business.id(), cursor)
+        .await
+        .unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].is_deleted());
     Ok(())
 }
