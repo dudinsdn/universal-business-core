@@ -4,7 +4,9 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 
-use application::{BusinessRepository, CustomerRepository, TenantRepository};
+use application::{
+    BusinessRepository, CustomerRepository, TenantRepository, TransactionRepository,
+};
 use domain::{BusinessId, CustomerId, CustomerName, CustomerPhone};
 
 use crate::dto::{
@@ -14,8 +16,8 @@ use crate::dto::{
 use crate::error::ApiError;
 use crate::state::AppState;
 
-pub async fn create_customer<TR, BR, CR>(
-    State(state): State<Arc<AppState<TR, BR, CR>>>,
+pub async fn create_customer<TR, BR, CR, TxR>(
+    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
     Path(business_id): Path<String>,
     Json(payload): Json<CreateCustomerRequest>,
 ) -> Result<(StatusCode, Json<CustomerResponse>), ApiError>
@@ -23,6 +25,7 @@ where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
+    TxR: TransactionRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id
         .parse()
@@ -53,8 +56,8 @@ where
     Ok((status, Json(CustomerResponse::from(&customer))))
 }
 
-pub async fn rename_customer<TR, BR, CR>(
-    State(state): State<Arc<AppState<TR, BR, CR>>>,
+pub async fn rename_customer<TR, BR, CR, TxR>(
+    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
     Path(id): Path<String>,
     Json(payload): Json<RenameRequest>,
 ) -> Result<Json<CustomerResponse>, ApiError>
@@ -62,6 +65,7 @@ where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
+    TxR: TransactionRepository + Clone + 'static,
 {
     let id: CustomerId = id.parse().map_err(application::ApplicationError::from)?;
     let name = CustomerName::new(payload.name).map_err(application::ApplicationError::from)?;
@@ -72,8 +76,8 @@ where
     Ok(Json(CustomerResponse::from(&customer)))
 }
 
-pub async fn update_customer_phone<TR, BR, CR>(
-    State(state): State<Arc<AppState<TR, BR, CR>>>,
+pub async fn update_customer_phone<TR, BR, CR, TxR>(
+    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
     Path(id): Path<String>,
     Json(payload): Json<UpdateCustomerPhoneRequest>,
 ) -> Result<Json<CustomerResponse>, ApiError>
@@ -81,6 +85,7 @@ where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
+    TxR: TransactionRepository + Clone + 'static,
 {
     let id: CustomerId = id.parse().map_err(application::ApplicationError::from)?;
     let phone = payload
@@ -95,8 +100,8 @@ where
     Ok(Json(CustomerResponse::from(&customer)))
 }
 
-pub async fn delete_customer<TR, BR, CR>(
-    State(state): State<Arc<AppState<TR, BR, CR>>>,
+pub async fn delete_customer<TR, BR, CR, TxR>(
+    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -104,6 +109,7 @@ where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
+    TxR: TransactionRepository + Clone + 'static,
 {
     let id: CustomerId = id.parse().map_err(application::ApplicationError::from)?;
     state

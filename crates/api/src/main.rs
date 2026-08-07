@@ -1,4 +1,5 @@
 use api::{AppState, build_router};
+use application::InMemoryTransactionRepository;
 use infra_postgres::{
     PgBusinessRepository, PgCustomerRepository, PgTenantRepository, run_migrations,
 };
@@ -22,15 +23,28 @@ async fn main() {
     let tenant_repository = PgTenantRepository::new(pool.clone());
     let business_repository = PgBusinessRepository::new(pool.clone());
     let customer_repository = PgCustomerRepository::new(pool);
+    // SEMENTARA: belum ada PgTransactionRepository — sesuai Development
+    // Rules, urutan wajibnya "Implementasikan API" (5) mendahului
+    // "Tambahkan database" (6). Data Transaction TIDAK akan persisten
+    // sampai PgTransactionRepository dibuat di langkah database
+    // selanjutnya.
+    let transaction_repository = InMemoryTransactionRepository::new();
 
-    let state = AppState::new(tenant_repository, business_repository, customer_repository);
+    let state = AppState::new(
+        tenant_repository,
+        business_repository,
+        customer_repository,
+        transaction_repository,
+    );
     let app = build_router(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
         .expect("gagal bind ke port 3000");
 
-    println!("API berjalan di http://0.0.0.0:3000 (repository: Postgres)");
+    println!(
+        "API berjalan di http://0.0.0.0:3000 (repository: Postgres, kecuali Transaction: in-memory sementara)"
+    );
 
     axum::serve(listener, app)
         .await

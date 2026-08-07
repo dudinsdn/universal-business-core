@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use domain::{Business, Customer, Tenant};
+use domain::{Business, Customer, Tenant, Transaction};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTenantRequest {
@@ -73,6 +73,29 @@ pub struct SyncQuery {
     pub updated_since: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreateTransactionRequest {
+    /// Sama seperti `CreateBusinessRequest::id` — opsional, untuk
+    /// idempotent create.
+    #[serde(default)]
+    pub id: Option<String>,
+    /// Opsional — banyak transaksi (mis. walk-in) tidak terkait Customer
+    /// tertentu (lihat keputusan Din soal Transaction).
+    #[serde(default)]
+    pub customer_id: Option<String>,
+    pub kind: String,
+    /// Nilai transaksi dalam satuan terkecil mata uang (mis. rupiah,
+    /// bukan sen kalau tidak ada pecahan) — bukan `Money`, lihat
+    /// `domain::transaction::TransactionAmount`.
+    pub amount: i64,
+    /// Timestamp RFC 3339 kapan transaksi SUNGGUHAN terjadi (beda dari
+    /// waktu pencatatan) — opsional, default ke waktu server saat ini
+    /// kalau tidak dikirim. Transaksi offline yang disinkronkan belakangan
+    /// WAJIB mengirim ini supaya urutan kejadian tetap akurat.
+    #[serde(default)]
+    pub occurred_at: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TenantResponse {
     pub id: String,
@@ -134,6 +157,38 @@ impl From<&Customer> for CustomerResponse {
             phone: customer.phone().map(|p| p.as_str().to_string()),
             version: customer.version(),
             is_deleted: customer.is_deleted(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct TransactionResponse {
+    pub id: String,
+    pub business_id: String,
+    pub customer_id: Option<String>,
+    pub kind: String,
+    pub amount: i64,
+    pub occurred_at: String,
+    pub version: u32,
+    pub is_deleted: bool,
+}
+
+impl From<&Transaction> for TransactionResponse {
+    fn from(transaction: &Transaction) -> Self {
+        Self {
+            id: transaction.id().to_string(),
+            business_id: transaction.business_id().to_string(),
+            customer_id: transaction.customer_id().map(|id| id.to_string()),
+            kind: transaction.kind().as_str().to_string(),
+            amount: transaction.amount().as_i64(),
+            // Nanos + "Z" eksplisit, bukan `to_rfc3339()` polos — hindari
+            // `+00:00` yang URL-encode buruk kalau dipakai lagi sebagai
+            // cursor `occurred_at`/`updated_since` (lihat catatan project).
+            occurred_at: transaction
+                .occurred_at()
+                .to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+            version: transaction.version(),
+            is_deleted: transaction.is_deleted(),
         }
     }
 }
