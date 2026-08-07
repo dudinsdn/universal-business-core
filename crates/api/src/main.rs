@@ -1,6 +1,7 @@
 use api::{AppState, build_router};
-use application::InMemoryCustomerRepository;
-use infra_postgres::{PgBusinessRepository, PgTenantRepository, run_migrations};
+use infra_postgres::{
+    PgBusinessRepository, PgCustomerRepository, PgTenantRepository, run_migrations,
+};
 use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
@@ -19,14 +20,8 @@ async fn main() {
         .expect("gagal menjalankan migration");
 
     let tenant_repository = PgTenantRepository::new(pool.clone());
-    let business_repository = PgBusinessRepository::new(pool);
-    // PgCustomerRepository belum ada (tahap "Database" untuk Customer
-    // belum dikerjakan) — pakai in-memory sementara sebagai bootstrap,
-    // pola yang sama dipakai dulu untuk Tenant/Business sebelum Postgres
-    // tersambung (lihat komentar di `InMemoryCustomerRepository`). Ganti
-    // ke `PgCustomerRepository` begitu migration & repository Postgres
-    // untuk Customer selesai dibuat.
-    let customer_repository = InMemoryCustomerRepository::new();
+    let business_repository = PgBusinessRepository::new(pool.clone());
+    let customer_repository = PgCustomerRepository::new(pool);
 
     let state = AppState::new(tenant_repository, business_repository, customer_repository);
     let app = build_router(state);

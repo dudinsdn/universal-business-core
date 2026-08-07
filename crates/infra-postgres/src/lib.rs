@@ -1,7 +1,9 @@
 pub mod business_repository;
+pub mod customer_repository;
 pub mod tenant_repository;
 
 pub use business_repository::PgBusinessRepository;
+pub use customer_repository::PgCustomerRepository;
 pub use tenant_repository::PgTenantRepository;
 
 /// Menjalankan migration di folder `migrations/` (di-embed saat compile
