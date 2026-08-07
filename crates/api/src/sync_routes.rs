@@ -4,10 +4,10 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use chrono::{DateTime, Utc};
 
-use application::{BusinessRepository, TenantRepository};
-use domain::{DomainError, TenantId};
+use application::{BusinessRepository, CustomerRepository, TenantRepository};
+use domain::{BusinessId, DomainError, TenantId};
 
-use crate::dto::{BusinessResponse, SyncQuery, TenantResponse};
+use crate::dto::{BusinessResponse, CustomerResponse, SyncQuery, TenantResponse};
 use crate::error::ApiError;
 use crate::state::AppState;
 
@@ -33,13 +33,14 @@ fn parse_updated_since(raw: Option<String>) -> Result<DateTime<Utc>, DomainError
 ///
 /// Client menyimpan `updated_at` terbesar dari response sebagai cursor
 /// untuk request `updated_since` berikutnya.
-pub async fn list_tenants_updated_since<TR, BR>(
-    State(state): State<Arc<AppState<TR, BR>>>,
+pub async fn list_tenants_updated_since<TR, BR, CR>(
+    State(state): State<Arc<AppState<TR, BR, CR>>>,
     Query(query): Query<SyncQuery>,
 ) -> Result<Json<Vec<TenantResponse>>, ApiError>
 where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
 {
     let since =
         parse_updated_since(query.updated_since).map_err(application::ApplicationError::from)?;
@@ -50,14 +51,15 @@ where
 /// `GET /tenants/{tenant_id}/businesses?updated_since=<RFC3339>` — sama
 /// seperti `list_tenants_updated_since`, tapi untuk Business di bawah satu
 /// Tenant tertentu (konsisten dengan resource path create business).
-pub async fn list_businesses_updated_since<TR, BR>(
-    State(state): State<Arc<AppState<TR, BR>>>,
+pub async fn list_businesses_updated_since<TR, BR, CR>(
+    State(state): State<Arc<AppState<TR, BR, CR>>>,
     Path(tenant_id): Path<String>,
     Query(query): Query<SyncQuery>,
 ) -> Result<Json<Vec<BusinessResponse>>, ApiError>
 where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
 {
     let tenant_id: TenantId = tenant_id
         .parse()
@@ -76,4 +78,34 @@ where
     Ok(Json(
         businesses.iter().map(BusinessResponse::from).collect(),
     ))
+}
+
+/// `GET /businesses/{business_id}/customers?updated_since=<RFC3339>` —
+/// sama seperti `list_businesses_updated_since`, tapi untuk Customer di
+/// bawah satu Business tertentu (Customer bernaung di bawah Business,
+/// bukan langsung di bawah Tenant — lihat `domain::Customer`).
+pub async fn list_customers_updated_since<TR, BR, CR>(
+    State(state): State<Arc<AppState<TR, BR, CR>>>,
+    Path(business_id): Path<String>,
+    Query(query): Query<SyncQuery>,
+) -> Result<Json<Vec<CustomerResponse>>, ApiError>
+where
+    TR: TenantRepository + Clone + 'static,
+    BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
+{
+    let business_id: BusinessId = business_id
+        .parse()
+        .map_err(application::ApplicationError::from)?;
+    // Pastikan Business-nya ada dulu (404 kalau tidak) — konsisten dengan
+    // create_customer dan list_businesses_updated_since.
+    let business = state.business_service.get_business(business_id).await?;
+
+    let since =
+        parse_updated_since(query.updated_since).map_err(application::ApplicationError::from)?;
+    let customers = state
+        .customer_service
+        .list_updated_since(business.id(), since)
+        .await?;
+    Ok(Json(customers.iter().map(CustomerResponse::from).collect()))
 }

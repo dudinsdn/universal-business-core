@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use domain::{Business, Tenant};
+use domain::{Business, Customer, Tenant};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTenantRequest {
@@ -33,6 +33,33 @@ pub struct CreateBusinessRequest {
     pub id: Option<String>,
     pub name: String,
     pub business_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCustomerRequest {
+    /// Sama seperti `CreateBusinessRequest::id` — opsional, untuk
+    /// idempotent create.
+    #[serde(default)]
+    pub id: Option<String>,
+    pub name: String,
+    /// Opsional — Customer boleh dibuat dulu tanpa nomor telepon, dilengkapi
+    /// belakangan lewat `PATCH /customers/{id}/phone`.
+    #[serde(default)]
+    pub phone: Option<String>,
+}
+
+/// Body untuk `PATCH /customers/{id}/phone`. Terpisah dari `RenameRequest`
+/// karena mengganti nomor telepon adalah use-case berbeda dari mengganti
+/// nama (lihat `CustomerService::update_customer_phone`) — juga supaya
+/// client tidak perlu mengirim `name` hanya untuk mengganti telepon,
+/// sesuai Development Rules: "jangan mengharuskan client selalu mengirim
+/// seluruh data".
+#[derive(Debug, Deserialize)]
+pub struct UpdateCustomerPhoneRequest {
+    /// `None`/tidak dikirim berarti menghapus nomor telepon yang tersimpan.
+    #[serde(default)]
+    pub phone: Option<String>,
+    pub expected_version: u32,
 }
 
 /// Query param untuk endpoint incremental sync (`GET /tenants
@@ -84,6 +111,29 @@ impl From<&Business> for BusinessResponse {
             business_type: business.business_type().as_str().to_string(),
             version: business.version(),
             is_deleted: business.is_deleted(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct CustomerResponse {
+    pub id: String,
+    pub business_id: String,
+    pub name: String,
+    pub phone: Option<String>,
+    pub version: u32,
+    pub is_deleted: bool,
+}
+
+impl From<&Customer> for CustomerResponse {
+    fn from(customer: &Customer) -> Self {
+        Self {
+            id: customer.id().to_string(),
+            business_id: customer.business_id().to_string(),
+            name: customer.name().as_str().to_string(),
+            phone: customer.phone().map(|p| p.as_str().to_string()),
+            version: customer.version(),
+            is_deleted: customer.is_deleted(),
         }
     }
 }

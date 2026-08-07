@@ -1,4 +1,5 @@
 use api::{AppState, build_router};
+use application::InMemoryCustomerRepository;
 use infra_postgres::{PgBusinessRepository, PgTenantRepository, run_migrations};
 use sqlx::postgres::PgPoolOptions;
 
@@ -19,8 +20,15 @@ async fn main() {
 
     let tenant_repository = PgTenantRepository::new(pool.clone());
     let business_repository = PgBusinessRepository::new(pool);
+    // PgCustomerRepository belum ada (tahap "Database" untuk Customer
+    // belum dikerjakan) — pakai in-memory sementara sebagai bootstrap,
+    // pola yang sama dipakai dulu untuk Tenant/Business sebelum Postgres
+    // tersambung (lihat komentar di `InMemoryCustomerRepository`). Ganti
+    // ke `PgCustomerRepository` begitu migration & repository Postgres
+    // untuk Customer selesai dibuat.
+    let customer_repository = InMemoryCustomerRepository::new();
 
-    let state = AppState::new(tenant_repository, business_repository);
+    let state = AppState::new(tenant_repository, business_repository, customer_repository);
     let app = build_router(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")

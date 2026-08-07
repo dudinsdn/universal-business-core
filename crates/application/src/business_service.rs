@@ -52,6 +52,17 @@ impl<R: BusinessRepository> BusinessService<R> {
         Ok((business, true))
     }
 
+    /// Mengambil satu Business berdasarkan id. Dibutuhkan pemanggil (mis.
+    /// API) yang perlu objek `Business` utuh sebelum memanggil use-case
+    /// lain, mis. `CustomerService::create_customer` yang menerima
+    /// `&Business` — pola sama seperti `TenantService::get_tenant`.
+    pub async fn get_business(&self, id: BusinessId) -> Result<Business, ApplicationError> {
+        self.repository
+            .find_by_id(id)
+            .await?
+            .ok_or(ApplicationError::BusinessNotFound)
+    }
+
     /// Semua Business di bawah satu Tenant yang berubah sejak `since` —
     /// dipakai endpoint incremental sync
     /// (`GET /tenants/{tenant_id}/businesses?updated_since=...`). Lihat
@@ -256,6 +267,28 @@ mod tests {
         assert!(!second_created);
         assert_eq!(second.id(), first.id());
         assert_eq!(second.name(), first.name());
+    }
+
+    #[tokio::test]
+    async fn get_business_returns_saved_business() {
+        let repo = InMemoryBusinessRepository::new();
+        let service = BusinessService::new(repo);
+        let tenant = active_tenant();
+        let created = create_test_business(&service, &tenant, "Toko Baju").await;
+
+        let fetched = service.get_business(created.id()).await.unwrap();
+
+        assert_eq!(fetched.id(), created.id());
+    }
+
+    #[tokio::test]
+    async fn get_business_fails_when_not_found() {
+        let repo = InMemoryBusinessRepository::new();
+        let service = BusinessService::new(repo);
+
+        let result = service.get_business(BusinessId::new()).await;
+
+        assert!(matches!(result, Err(ApplicationError::BusinessNotFound)));
     }
 
     #[tokio::test]
