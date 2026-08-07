@@ -16,12 +16,17 @@ pub mod error;
 pub mod in_memory;
 pub mod repository;
 pub mod tenant_service;
+pub mod transaction_service;
 
 pub use business_service::BusinessService;
 pub use customer_service::CustomerService;
 pub use error::{ApplicationError, RepositoryError};
 pub use in_memory::{
     InMemoryBusinessRepository, InMemoryCustomerRepository, InMemoryTenantRepository,
+    InMemoryTransactionRepository,
 };
-pub use repository::{BusinessRepository, CustomerRepository, TenantRepository};
+pub use repository::{
+    BusinessRepository, CustomerRepository, TenantRepository, TransactionRepository,
+};
 pub use tenant_service::TenantService;
+pub use transaction_service::TransactionService;

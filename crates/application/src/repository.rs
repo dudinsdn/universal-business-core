@@ -1,7 +1,10 @@
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
-use domain::{Business, BusinessId, BusinessName, Customer, CustomerId, Tenant, TenantId};
+use domain::{
+    Business, BusinessId, BusinessName, Customer, CustomerId, Tenant, TenantId, Transaction,
+    TransactionId,
+};
 
 use crate::error::RepositoryError;
 
@@ -93,4 +96,30 @@ pub trait CustomerRepository: Send + Sync {
         business_id: BusinessId,
         since: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<Customer>, RepositoryError>> + Send;
+}
+
+/// Port untuk menyimpan/mengambil Transaction.
+///
+/// Sama seperti `CustomerRepository`: tidak ada method keunikan nama —
+/// Transaction tidak punya nama, dan tidak ada business rule keunikan
+/// apa pun di level ini.
+pub trait TransactionRepository: Send + Sync {
+    fn find_by_id(
+        &self,
+        id: TransactionId,
+    ) -> impl Future<Output = Result<Option<Transaction>, RepositoryError>> + Send;
+
+    fn save(
+        &self,
+        transaction: &Transaction,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    /// Sama seperti `CustomerRepository::find_updated_since_by_business` —
+    /// Transaction bernaung di bawah Business, bukan langsung di bawah
+    /// Tenant.
+    fn find_updated_since_by_business(
+        &self,
+        business_id: BusinessId,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Transaction>, RepositoryError>> + Send;
 }

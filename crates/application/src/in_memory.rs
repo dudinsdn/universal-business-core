@@ -16,10 +16,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use domain::{Business, BusinessId, BusinessName, Customer, CustomerId, Tenant, TenantId};
+use domain::{
+    Business, BusinessId, BusinessName, Customer, CustomerId, Tenant, TenantId, Transaction,
+    TransactionId,
+};
 
 use crate::error::RepositoryError;
-use crate::repository::{BusinessRepository, CustomerRepository, TenantRepository};
+use crate::repository::{
+    BusinessRepository, CustomerRepository, TenantRepository, TransactionRepository,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryTenantRepository {
@@ -208,10 +213,64 @@ impl CustomerRepository for InMemoryCustomerRepository {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct InMemoryTransactionRepository {
+    data: Arc<Mutex<HashMap<TransactionId, Transaction>>>,
+}
+
+impl InMemoryTransactionRepository {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl TransactionRepository for InMemoryTransactionRepository {
+    async fn find_by_id(&self, id: TransactionId) -> Result<Option<Transaction>, RepositoryError> {
+        let data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        Ok(data.get(&id).cloned())
+    }
+
+    async fn save(&self, transaction: &Transaction) -> Result<(), RepositoryError> {
+        let mut data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        if let Some(existing) = data.get(&transaction.id()) {
+            let expected_previous_version = transaction.version().saturating_sub(1);
+            if existing.version() != expected_previous_version {
+                return Err(RepositoryError::VersionConflict);
+            }
+        }
+        data.insert(transaction.id(), transaction.clone());
+        Ok(())
+    }
+
+    async fn find_updated_since_by_business(
+        &self,
+        business_id: BusinessId,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Transaction>, RepositoryError> {
+        let data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        let mut result: Vec<Transaction> = data
+            .values()
+            .filter(|t| t.business_id() == business_id && t.updated_at() > since)
+            .cloned()
+            .collect();
+        result.sort_by_key(|t| t.updated_at());
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use domain::{CustomerName, TenantName};
+    use domain::{CustomerName, TenantName, TransactionAmount, TransactionKind};
 
     #[tokio::test]
     async fn save_detects_concurrent_version_conflict() {
@@ -351,6 +410,131 @@ mod tests {
         // Client offline harus tahu soal penghapusan juga.
         customer.soft_delete();
         repo.save(&customer).await.unwrap();
+
+        let changed = repo
+            .find_updated_since_by_business(business_id, cursor)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].is_deleted());
+    }
+
+    #[tokio::test]
+    async fn save_detects_concurrent_version_conflict_for_transaction() {
+        let repo = InMemoryTransactionRepository::new();
+        let mut transaction = Transaction::new(
+            BusinessId::new(),
+            None,
+            TransactionKind::new("sale").unwrap(),
+            TransactionAmount::new(10_000).unwrap(),
+            Utc::now(),
+        );
+        repo.save(&transaction).await.unwrap();
+
+        // Dua "pembaca" sama-sama mulai dari data versi 0.
+        let stale_copy = transaction.clone();
+
+        // Salah satu menang duluan: soft delete, jadi versi 1, berhasil
+        // disimpan.
+        transaction.soft_delete();
+        repo.save(&transaction).await.unwrap();
+
+        // Yang satu lagi telat: masih berdasarkan data versi 0. Simulasikan
+        // konflik dengan menyimpan ulang salinan basi ini (tanpa perubahan
+        // apa pun juga cukup untuk memicu conflict karena versinya sudah
+        // tertinggal di penyimpanan).
+        let result = repo.save(&stale_copy).await;
+
+        assert_eq!(result, Err(RepositoryError::VersionConflict));
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_only_returns_transactions_changed_after_cursor() {
+        let repo = InMemoryTransactionRepository::new();
+        let business_id = BusinessId::new();
+
+        let old_transaction = Transaction::new(
+            business_id,
+            None,
+            TransactionKind::new("sale").unwrap(),
+            TransactionAmount::new(10_000).unwrap(),
+            Utc::now(),
+        );
+        repo.save(&old_transaction).await.unwrap();
+
+        let cursor = Utc::now();
+
+        let new_transaction = Transaction::new(
+            business_id,
+            None,
+            TransactionKind::new("sale").unwrap(),
+            TransactionAmount::new(20_000).unwrap(),
+            Utc::now(),
+        );
+        repo.save(&new_transaction).await.unwrap();
+
+        let changed = repo
+            .find_updated_since_by_business(business_id, cursor)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), new_transaction.id());
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_excludes_other_businesses_for_transaction() {
+        let repo = InMemoryTransactionRepository::new();
+        let business_a = BusinessId::new();
+        let business_b = BusinessId::new();
+
+        let transaction_a = Transaction::new(
+            business_a,
+            None,
+            TransactionKind::new("sale").unwrap(),
+            TransactionAmount::new(10_000).unwrap(),
+            Utc::now(),
+        );
+        let transaction_b = Transaction::new(
+            business_b,
+            None,
+            TransactionKind::new("sale").unwrap(),
+            TransactionAmount::new(10_000).unwrap(),
+            Utc::now(),
+        );
+        repo.save(&transaction_a).await.unwrap();
+        repo.save(&transaction_b).await.unwrap();
+
+        let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let changed = repo
+            .find_updated_since_by_business(business_a, epoch)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), transaction_a.id());
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_includes_soft_deleted_transactions() {
+        let repo = InMemoryTransactionRepository::new();
+        let business_id = BusinessId::new();
+
+        let mut transaction = Transaction::new(
+            business_id,
+            None,
+            TransactionKind::new("sale").unwrap(),
+            TransactionAmount::new(10_000).unwrap(),
+            Utc::now(),
+        );
+        repo.save(&transaction).await.unwrap();
+
+        let cursor = Utc::now();
+
+        // Client offline harus tahu soal penghapusan juga.
+        transaction.soft_delete();
+        repo.save(&transaction).await.unwrap();
 
         let changed = repo
             .find_updated_since_by_business(business_id, cursor)

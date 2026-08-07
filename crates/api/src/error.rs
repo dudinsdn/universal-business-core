@@ -46,7 +46,8 @@ impl IntoResponse for ApiError {
             },
             ApplicationError::TenantNotFound
             | ApplicationError::BusinessNotFound
-            | ApplicationError::CustomerNotFound => StatusCode::NOT_FOUND,
+            | ApplicationError::CustomerNotFound
+            | ApplicationError::TransactionNotFound => StatusCode::NOT_FOUND,
             ApplicationError::Repository(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(json!({ "error": message }))).into_response()
