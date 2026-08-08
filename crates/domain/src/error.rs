@@ -49,6 +49,19 @@ pub enum DomainError {
     /// sama dengan `to_customer_id` — Customer tidak bisa berelasi dengan
     /// dirinya sendiri.
     SelfRelationship,
+    /// `InteractionType::new` dipanggil dengan string kosong.
+    EmptyInteractionType,
+    InteractionTypeTooLong {
+        max: usize,
+    },
+    InvalidInteractionType,
+    /// `InteractionNote::new` dipanggil dengan string kosong. Beda dari
+    /// "tidak ada catatan" (`None`) — itu bukan error, cukup jangan
+    /// panggil `InteractionNote::new` sama sekali.
+    EmptyInteractionNote,
+    InteractionNoteTooLong {
+        max: usize,
+    },
 }
 
 impl fmt::Display for DomainError {
@@ -116,6 +129,18 @@ impl fmt::Display for DomainError {
             ),
             DomainError::SelfRelationship => {
                 write!(f, "customer tidak bisa berelasi dengan dirinya sendiri")
+            }
+            DomainError::EmptyInteractionType => write!(f, "jenis interaksi tidak boleh kosong"),
+            DomainError::InteractionTypeTooLong { max } => {
+                write!(f, "jenis interaksi tidak boleh lebih dari {max} karakter")
+            }
+            DomainError::InvalidInteractionType => write!(
+                f,
+                "jenis interaksi hanya boleh berisi huruf, angka, underscore, atau hyphen"
+            ),
+            DomainError::EmptyInteractionNote => write!(f, "catatan tidak boleh kosong"),
+            DomainError::InteractionNoteTooLong { max } => {
+                write!(f, "catatan tidak boleh lebih dari {max} karakter")
             }
         }
     }

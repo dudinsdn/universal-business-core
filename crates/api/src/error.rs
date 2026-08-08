@@ -40,7 +40,12 @@ impl IntoResponse for ApiError {
                 | DomainError::InvalidAmount
                 | DomainError::EmptyRelationshipType
                 | DomainError::RelationshipTypeTooLong { .. }
-                | DomainError::InvalidRelationshipType => StatusCode::BAD_REQUEST,
+                | DomainError::InvalidRelationshipType
+                | DomainError::EmptyInteractionType
+                | DomainError::InteractionTypeTooLong { .. }
+                | DomainError::InvalidInteractionType
+                | DomainError::EmptyInteractionNote
+                | DomainError::InteractionNoteTooLong { .. } => StatusCode::BAD_REQUEST,
                 DomainError::DuplicateBusinessName
                 | DomainError::TenantHasActiveBusiness
                 | DomainError::TenantIsDeleted
