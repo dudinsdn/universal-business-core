@@ -13,16 +13,17 @@
 //! pesan pendamping.
 
 use application::{
-    BusinessRepository, CustomerRepository, RepositoryError, TenantRepository,
-    TransactionRepository,
+    BusinessRepository, CustomerRepository, RelationshipRepository, RepositoryError,
+    TenantRepository, TransactionRepository,
 };
 use chrono::Utc;
 use domain::{
-    Business, BusinessName, BusinessType, Customer, CustomerName, CustomerPhone, Tenant,
-    TenantName, Transaction, TransactionAmount, TransactionKind,
+    Business, BusinessName, BusinessType, Customer, CustomerName, CustomerPhone, Relationship,
+    RelationshipType, Tenant, TenantName, Transaction, TransactionAmount, TransactionKind,
 };
 use infra_postgres::{
-    PgBusinessRepository, PgCustomerRepository, PgTenantRepository, PgTransactionRepository,
+    PgBusinessRepository, PgCustomerRepository, PgRelationshipRepository, PgTenantRepository,
+    PgTransactionRepository,
 };
 use sqlx::PgPool;
 
@@ -201,6 +202,219 @@ async fn find_updated_since_includes_soft_deleted_tenants(pool: PgPool) -> sqlx:
     repo.save(&tenant).await.unwrap();
 
     let changed = repo.find_updated_since(cursor).await.unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].is_deleted());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_and_find_relationship_roundtrips(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let relationship_repo = PgRelationshipRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer_a = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    let customer_b = Customer::new(business.id(), CustomerName::new("Ani").unwrap(), None);
+    customer_repo.save(&customer_a).await.unwrap();
+    customer_repo.save(&customer_b).await.unwrap();
+
+    let relationship = Relationship::new(
+        business.id(),
+        customer_a.id(),
+        customer_b.id(),
+        RelationshipType::new("sibling").unwrap(),
+    )
+    .unwrap();
+    relationship_repo.save(&relationship).await.unwrap();
+
+    let fetched = relationship_repo
+        .find_by_id(relationship.id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(fetched.id(), relationship.id());
+    assert_eq!(fetched.business_id(), business.id());
+    assert_eq!(fetched.from_customer_id(), customer_a.id());
+    assert_eq!(fetched.to_customer_id(), customer_b.id());
+    assert_eq!(fetched.relationship_type().as_str(), "sibling");
+    assert_eq!(fetched.version(), 0);
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_relationship_by_id_returns_none_when_not_found(pool: PgPool) -> sqlx::Result<()> {
+    let repo = PgRelationshipRepository::new(pool);
+    let result = repo
+        .find_by_id(domain::RelationshipId::new())
+        .await
+        .unwrap();
+    assert!(result.is_none());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_relationship_detects_version_conflict_at_database_level(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let relationship_repo = PgRelationshipRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer_a = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    let customer_b = Customer::new(business.id(), CustomerName::new("Ani").unwrap(), None);
+    customer_repo.save(&customer_a).await.unwrap();
+    customer_repo.save(&customer_b).await.unwrap();
+
+    let mut relationship = Relationship::new(
+        business.id(),
+        customer_a.id(),
+        customer_b.id(),
+        RelationshipType::new("sibling").unwrap(),
+    )
+    .unwrap();
+    relationship_repo.save(&relationship).await.unwrap();
+
+    // Dua "pembaca" sama-sama mulai dari data versi 0.
+    let mut stale_copy = relationship.clone();
+
+    // Salah satu menang duluan: soft delete, jadi versi 1, berhasil
+    // disimpan.
+    relationship.soft_delete();
+    relationship_repo.save(&relationship).await.unwrap();
+
+    // Yang telat masih berdasarkan versi 0 saat mulai mutasi — mencoba
+    // soft delete juga, tapi versi 0 di penyimpanan sudah tidak ada lagi —
+    // harus ditolak DB.
+    stale_copy.soft_delete();
+    let result = relationship_repo.save(&stale_copy).await;
+
+    assert!(matches!(result, Err(RepositoryError::VersionConflict)));
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_excludes_other_business_for_relationship(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let relationship_repo = PgRelationshipRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+
+    let business_a = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    let business_b = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik B").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business_a).await.unwrap();
+    business_repo.save(&business_b).await.unwrap();
+
+    let customer_a1 = Customer::new(business_a.id(), CustomerName::new("Budi").unwrap(), None);
+    let customer_a2 = Customer::new(business_a.id(), CustomerName::new("Ani").unwrap(), None);
+    let customer_b1 = Customer::new(business_b.id(), CustomerName::new("Siti").unwrap(), None);
+    let customer_b2 = Customer::new(business_b.id(), CustomerName::new("Joko").unwrap(), None);
+    customer_repo.save(&customer_a1).await.unwrap();
+    customer_repo.save(&customer_a2).await.unwrap();
+    customer_repo.save(&customer_b1).await.unwrap();
+    customer_repo.save(&customer_b2).await.unwrap();
+
+    let relationship_a = Relationship::new(
+        business_a.id(),
+        customer_a1.id(),
+        customer_a2.id(),
+        RelationshipType::new("sibling").unwrap(),
+    )
+    .unwrap();
+    let relationship_b = Relationship::new(
+        business_b.id(),
+        customer_b1.id(),
+        customer_b2.id(),
+        RelationshipType::new("sibling").unwrap(),
+    )
+    .unwrap();
+    relationship_repo.save(&relationship_a).await.unwrap();
+    relationship_repo.save(&relationship_b).await.unwrap();
+
+    let epoch = chrono::DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+    let changed = relationship_repo
+        .find_updated_since_by_business(business_a.id(), epoch)
+        .await
+        .unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].id(), relationship_a.id());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_includes_soft_deleted_relationships(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let relationship_repo = PgRelationshipRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer_a = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    let customer_b = Customer::new(business.id(), CustomerName::new("Ani").unwrap(), None);
+    customer_repo.save(&customer_a).await.unwrap();
+    customer_repo.save(&customer_b).await.unwrap();
+
+    let mut relationship = Relationship::new(
+        business.id(),
+        customer_a.id(),
+        customer_b.id(),
+        RelationshipType::new("sibling").unwrap(),
+    )
+    .unwrap();
+    relationship_repo.save(&relationship).await.unwrap();
+
+    let cursor = Utc::now();
+
+    // Client offline harus tahu soal penghapusan juga.
+    relationship.soft_delete();
+    relationship_repo.save(&relationship).await.unwrap();
+
+    let changed = relationship_repo
+        .find_updated_since_by_business(business.id(), cursor)
+        .await
+        .unwrap();
 
     assert_eq!(changed.len(), 1);
     assert!(changed[0].is_deleted());

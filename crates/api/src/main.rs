@@ -1,8 +1,7 @@
 use api::{AppState, build_router};
-use application::InMemoryRelationshipRepository;
 use infra_postgres::{
-    PgBusinessRepository, PgCustomerRepository, PgTenantRepository, PgTransactionRepository,
-    run_migrations,
+    PgBusinessRepository, PgCustomerRepository, PgRelationshipRepository, PgTenantRepository,
+    PgTransactionRepository, run_migrations,
 };
 use sqlx::postgres::PgPoolOptions;
 
@@ -24,13 +23,8 @@ async fn main() {
     let tenant_repository = PgTenantRepository::new(pool.clone());
     let business_repository = PgBusinessRepository::new(pool.clone());
     let customer_repository = PgCustomerRepository::new(pool.clone());
-    let transaction_repository = PgTransactionRepository::new(pool);
-    // SEMENTARA: belum ada PgRelationshipRepository — sesuai Development
-    // Rules, urutan wajibnya "Implementasikan API" (5) mendahului
-    // "Tambahkan database" (6). Data Relationship TIDAK akan persisten
-    // sampai PgRelationshipRepository dibuat di langkah database
-    // selanjutnya.
-    let relationship_repository = InMemoryRelationshipRepository::new();
+    let transaction_repository = PgTransactionRepository::new(pool.clone());
+    let relationship_repository = PgRelationshipRepository::new(pool);
 
     let state = AppState::new(
         tenant_repository,
@@ -45,9 +39,7 @@ async fn main() {
         .await
         .expect("gagal bind ke port 3000");
 
-    println!(
-        "API berjalan di http://0.0.0.0:3000 (repository: Postgres, kecuali Relationship: in-memory sementara)"
-    );
+    println!("API berjalan di http://0.0.0.0:3000 (repository: Postgres)");
 
     axum::serve(listener, app)
         .await
