@@ -57,6 +57,7 @@ pub enum ApplicationError {
     CustomerNotFound,
     TransactionNotFound,
     RelationshipNotFound,
+    InteractionNotFound,
 }
 
 impl fmt::Display for ApplicationError {
@@ -69,6 +70,7 @@ impl fmt::Display for ApplicationError {
             ApplicationError::CustomerNotFound => write!(f, "customer tidak ditemukan"),
             ApplicationError::TransactionNotFound => write!(f, "transaction tidak ditemukan"),
             ApplicationError::RelationshipNotFound => write!(f, "relationship tidak ditemukan"),
+            ApplicationError::InteractionNotFound => write!(f, "interaction tidak ditemukan"),
         }
     }
 }

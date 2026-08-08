@@ -2,8 +2,8 @@ use std::future::Future;
 
 use chrono::{DateTime, Utc};
 use domain::{
-    Business, BusinessId, BusinessName, Customer, CustomerId, Relationship, RelationshipId, Tenant,
-    TenantId, Transaction, TransactionId,
+    Business, BusinessId, BusinessName, Customer, CustomerId, Interaction, InteractionId,
+    Relationship, RelationshipId, Tenant, TenantId, Transaction, TransactionId,
 };
 
 use crate::error::RepositoryError;
@@ -149,4 +149,29 @@ pub trait RelationshipRepository: Send + Sync {
         business_id: BusinessId,
         since: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<Relationship>, RepositoryError>> + Send;
+}
+
+/// Port untuk menyimpan/mengambil Interaction.
+///
+/// Sama seperti `TransactionRepository`/`RelationshipRepository`: tidak
+/// ada method keunikan apa pun di level ini.
+pub trait InteractionRepository: Send + Sync {
+    fn find_by_id(
+        &self,
+        id: InteractionId,
+    ) -> impl Future<Output = Result<Option<Interaction>, RepositoryError>> + Send;
+
+    fn save(
+        &self,
+        interaction: &Interaction,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    /// Sama seperti `RelationshipRepository::find_updated_since_by_business`
+    /// — Interaction bernaung di bawah Business, bukan langsung di bawah
+    /// Tenant.
+    fn find_updated_since_by_business(
+        &self,
+        business_id: BusinessId,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Interaction>, RepositoryError>> + Send;
 }

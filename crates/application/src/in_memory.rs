@@ -17,14 +17,14 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 use domain::{
-    Business, BusinessId, BusinessName, Customer, CustomerId, Relationship, RelationshipId, Tenant,
-    TenantId, Transaction, TransactionId,
+    Business, BusinessId, BusinessName, Customer, CustomerId, Interaction, InteractionId,
+    Relationship, RelationshipId, Tenant, TenantId, Transaction, TransactionId,
 };
 
 use crate::error::RepositoryError;
 use crate::repository::{
-    BusinessRepository, CustomerRepository, RelationshipRepository, TenantRepository,
-    TransactionRepository,
+    BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
+    TenantRepository, TransactionRepository,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -325,10 +325,67 @@ impl RelationshipRepository for InMemoryRelationshipRepository {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct InMemoryInteractionRepository {
+    data: Arc<Mutex<HashMap<InteractionId, Interaction>>>,
+}
+
+impl InMemoryInteractionRepository {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl InteractionRepository for InMemoryInteractionRepository {
+    async fn find_by_id(&self, id: InteractionId) -> Result<Option<Interaction>, RepositoryError> {
+        let data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        Ok(data.get(&id).cloned())
+    }
+
+    async fn save(&self, interaction: &Interaction) -> Result<(), RepositoryError> {
+        let mut data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        if let Some(existing) = data.get(&interaction.id()) {
+            let expected_previous_version = interaction.version().saturating_sub(1);
+            if existing.version() != expected_previous_version {
+                return Err(RepositoryError::VersionConflict);
+            }
+        }
+        data.insert(interaction.id(), interaction.clone());
+        Ok(())
+    }
+
+    async fn find_updated_since_by_business(
+        &self,
+        business_id: BusinessId,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<Interaction>, RepositoryError> {
+        let data = self
+            .data
+            .lock()
+            .expect("in-memory repository lock poisoned");
+        let mut result: Vec<Interaction> = data
+            .values()
+            .filter(|i| i.business_id() == business_id && i.updated_at() > since)
+            .cloned()
+            .collect();
+        result.sort_by_key(|i| i.updated_at());
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use domain::{CustomerName, RelationshipType, TenantName, TransactionAmount, TransactionKind};
+    use domain::{
+        CustomerName, InteractionType, RelationshipType, TenantName, TransactionAmount,
+        TransactionKind,
+    };
 
     #[tokio::test]
     async fn save_detects_concurrent_version_conflict() {
@@ -718,6 +775,131 @@ mod tests {
         // Client offline harus tahu soal penghapusan juga.
         relationship.soft_delete();
         repo.save(&relationship).await.unwrap();
+
+        let changed = repo
+            .find_updated_since_by_business(business_id, cursor)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].is_deleted());
+    }
+
+    #[tokio::test]
+    async fn save_detects_concurrent_version_conflict_for_interaction() {
+        let repo = InMemoryInteractionRepository::new();
+        let mut interaction = Interaction::new(
+            BusinessId::new(),
+            CustomerId::new(),
+            InteractionType::new("call").unwrap(),
+            None,
+            Utc::now(),
+        );
+        repo.save(&interaction).await.unwrap();
+
+        // Dua "pembaca" sama-sama mulai dari data versi 0.
+        let mut stale_copy = interaction.clone();
+
+        // Salah satu menang duluan: soft delete, jadi versi 1, berhasil
+        // disimpan.
+        interaction.soft_delete();
+        repo.save(&interaction).await.unwrap();
+
+        // Yang telat masih berdasarkan versi 0 saat mulai mutasi — mencoba
+        // soft delete juga, tapi versi 0 di penyimpanan sudah tidak ada
+        // lagi — harus ditolak sebagai conflict.
+        stale_copy.soft_delete();
+        let result = repo.save(&stale_copy).await;
+
+        assert_eq!(result, Err(RepositoryError::VersionConflict));
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_only_returns_interactions_changed_after_cursor() {
+        let repo = InMemoryInteractionRepository::new();
+        let business_id = BusinessId::new();
+
+        let old_interaction = Interaction::new(
+            business_id,
+            CustomerId::new(),
+            InteractionType::new("call").unwrap(),
+            None,
+            Utc::now(),
+        );
+        repo.save(&old_interaction).await.unwrap();
+
+        let cursor = Utc::now();
+
+        let new_interaction = Interaction::new(
+            business_id,
+            CustomerId::new(),
+            InteractionType::new("call").unwrap(),
+            None,
+            Utc::now(),
+        );
+        repo.save(&new_interaction).await.unwrap();
+
+        let changed = repo
+            .find_updated_since_by_business(business_id, cursor)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), new_interaction.id());
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_excludes_other_businesses_for_interaction() {
+        let repo = InMemoryInteractionRepository::new();
+        let business_a = BusinessId::new();
+        let business_b = BusinessId::new();
+
+        let interaction_a = Interaction::new(
+            business_a,
+            CustomerId::new(),
+            InteractionType::new("call").unwrap(),
+            None,
+            Utc::now(),
+        );
+        let interaction_b = Interaction::new(
+            business_b,
+            CustomerId::new(),
+            InteractionType::new("call").unwrap(),
+            None,
+            Utc::now(),
+        );
+        repo.save(&interaction_a).await.unwrap();
+        repo.save(&interaction_b).await.unwrap();
+
+        let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let changed = repo
+            .find_updated_since_by_business(business_a, epoch)
+            .await
+            .unwrap();
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].id(), interaction_a.id());
+    }
+
+    #[tokio::test]
+    async fn find_updated_since_by_business_includes_soft_deleted_interactions() {
+        let repo = InMemoryInteractionRepository::new();
+        let business_id = BusinessId::new();
+
+        let mut interaction = Interaction::new(
+            business_id,
+            CustomerId::new(),
+            InteractionType::new("call").unwrap(),
+            None,
+            Utc::now(),
+        );
+        repo.save(&interaction).await.unwrap();
+
+        let cursor = Utc::now();
+
+        // Client offline harus tahu soal penghapusan juga.
+        interaction.soft_delete();
+        repo.save(&interaction).await.unwrap();
 
         let changed = repo
             .find_updated_since_by_business(business_id, cursor)
