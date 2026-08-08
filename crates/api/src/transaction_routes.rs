@@ -1,12 +1,11 @@
-use std::sync::Arc;
-
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 
 use application::{
-    BusinessRepository, CustomerRepository, TenantRepository, TransactionRepository,
+    BusinessRepository, CustomerRepository, RelationshipRepository, TenantRepository,
+    TransactionRepository,
 };
 use domain::{
     BusinessId, CustomerId, DomainError, TransactionAmount, TransactionId, TransactionKind,
@@ -14,7 +13,7 @@ use domain::{
 
 use crate::dto::{CreateTransactionRequest, DeleteRequest, TransactionResponse};
 use crate::error::ApiError;
-use crate::state::AppState;
+use crate::state::SharedState;
 
 /// Parse `occurred_at` (RFC 3339). Beda dari `parse_updated_since` di
 /// `sync_routes` — default-nya waktu SEKARANG (bukan epoch), karena kalau
@@ -29,8 +28,8 @@ fn parse_occurred_at(raw: Option<String>) -> Result<DateTime<Utc>, DomainError> 
     }
 }
 
-pub async fn create_transaction<TR, BR, CR, TxR>(
-    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
+pub async fn create_transaction<TR, BR, CR, TxR, RR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
     Path(business_id): Path<String>,
     Json(payload): Json<CreateTransactionRequest>,
 ) -> Result<(StatusCode, Json<TransactionResponse>), ApiError>
@@ -39,6 +38,7 @@ where
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
+    RR: RelationshipRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id
         .parse()
@@ -74,8 +74,8 @@ where
     Ok((status, Json(TransactionResponse::from(&transaction))))
 }
 
-pub async fn delete_transaction<TR, BR, CR, TxR>(
-    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
+pub async fn delete_transaction<TR, BR, CR, TxR, RR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -84,6 +84,7 @@ where
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
+    RR: RelationshipRepository + Clone + 'static,
 {
     let id: TransactionId = id.parse().map_err(application::ApplicationError::from)?;
     state

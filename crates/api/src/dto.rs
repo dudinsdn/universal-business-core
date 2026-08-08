@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use domain::{Business, Customer, Tenant, Transaction};
+use domain::{Business, Customer, Relationship, Tenant, Transaction};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTenantRequest {
@@ -96,6 +96,17 @@ pub struct CreateTransactionRequest {
     pub occurred_at: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreateRelationshipRequest {
+    /// Sama seperti `CreateTransactionRequest::id` — opsional, untuk
+    /// idempotent create.
+    #[serde(default)]
+    pub id: Option<String>,
+    pub from_customer_id: String,
+    pub to_customer_id: String,
+    pub relationship_type: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TenantResponse {
     pub id: String,
@@ -189,6 +200,31 @@ impl From<&Transaction> for TransactionResponse {
                 .to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
             version: transaction.version(),
             is_deleted: transaction.is_deleted(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct RelationshipResponse {
+    pub id: String,
+    pub business_id: String,
+    pub from_customer_id: String,
+    pub to_customer_id: String,
+    pub relationship_type: String,
+    pub version: u32,
+    pub is_deleted: bool,
+}
+
+impl From<&Relationship> for RelationshipResponse {
+    fn from(relationship: &Relationship) -> Self {
+        Self {
+            id: relationship.id().to_string(),
+            business_id: relationship.business_id().to_string(),
+            from_customer_id: relationship.from_customer_id().to_string(),
+            to_customer_id: relationship.to_customer_id().to_string(),
+            relationship_type: relationship.relationship_type().as_str().to_string(),
+            version: relationship.version(),
+            is_deleted: relationship.is_deleted(),
         }
     }
 }

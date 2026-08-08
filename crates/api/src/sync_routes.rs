@@ -1,19 +1,19 @@
-use std::sync::Arc;
-
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use chrono::{DateTime, Utc};
 
 use application::{
-    BusinessRepository, CustomerRepository, TenantRepository, TransactionRepository,
+    BusinessRepository, CustomerRepository, RelationshipRepository, TenantRepository,
+    TransactionRepository,
 };
 use domain::{BusinessId, DomainError, TenantId};
 
 use crate::dto::{
-    BusinessResponse, CustomerResponse, SyncQuery, TenantResponse, TransactionResponse,
+    BusinessResponse, CustomerResponse, RelationshipResponse, SyncQuery, TenantResponse,
+    TransactionResponse,
 };
 use crate::error::ApiError;
-use crate::state::AppState;
+use crate::state::SharedState;
 
 /// Parse query param `updated_since` (RFC 3339, mis. "2026-08-01T00:00:00Z").
 /// Kosong berarti "sejak awal waktu" — dipakai client untuk full sync
@@ -37,8 +37,8 @@ fn parse_updated_since(raw: Option<String>) -> Result<DateTime<Utc>, DomainError
 ///
 /// Client menyimpan `updated_at` terbesar dari response sebagai cursor
 /// untuk request `updated_since` berikutnya.
-pub async fn list_tenants_updated_since<TR, BR, CR, TxR>(
-    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
+pub async fn list_tenants_updated_since<TR, BR, CR, TxR, RR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
     Query(query): Query<SyncQuery>,
 ) -> Result<Json<Vec<TenantResponse>>, ApiError>
 where
@@ -46,6 +46,7 @@ where
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
+    RR: RelationshipRepository + Clone + 'static,
 {
     let since =
         parse_updated_since(query.updated_since).map_err(application::ApplicationError::from)?;
@@ -56,8 +57,8 @@ where
 /// `GET /tenants/{tenant_id}/businesses?updated_since=<RFC3339>` — sama
 /// seperti `list_tenants_updated_since`, tapi untuk Business di bawah satu
 /// Tenant tertentu (konsisten dengan resource path create business).
-pub async fn list_businesses_updated_since<TR, BR, CR, TxR>(
-    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
+pub async fn list_businesses_updated_since<TR, BR, CR, TxR, RR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
     Path(tenant_id): Path<String>,
     Query(query): Query<SyncQuery>,
 ) -> Result<Json<Vec<BusinessResponse>>, ApiError>
@@ -66,6 +67,7 @@ where
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
+    RR: RelationshipRepository + Clone + 'static,
 {
     let tenant_id: TenantId = tenant_id
         .parse()
@@ -90,8 +92,8 @@ where
 /// sama seperti `list_businesses_updated_since`, tapi untuk Customer di
 /// bawah satu Business tertentu (Customer bernaung di bawah Business,
 /// bukan langsung di bawah Tenant — lihat `domain::Customer`).
-pub async fn list_customers_updated_since<TR, BR, CR, TxR>(
-    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
+pub async fn list_customers_updated_since<TR, BR, CR, TxR, RR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
     Path(business_id): Path<String>,
     Query(query): Query<SyncQuery>,
 ) -> Result<Json<Vec<CustomerResponse>>, ApiError>
@@ -100,6 +102,7 @@ where
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
+    RR: RelationshipRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id
         .parse()
@@ -121,8 +124,8 @@ where
 /// sama seperti `list_customers_updated_since`, tapi untuk Transaction di
 /// bawah satu Business tertentu (Transaction bernaung di bawah Business,
 /// bukan langsung di bawah Tenant — lihat `domain::Transaction`).
-pub async fn list_transactions_updated_since<TR, BR, CR, TxR>(
-    State(state): State<Arc<AppState<TR, BR, CR, TxR>>>,
+pub async fn list_transactions_updated_since<TR, BR, CR, TxR, RR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
     Path(business_id): Path<String>,
     Query(query): Query<SyncQuery>,
 ) -> Result<Json<Vec<TransactionResponse>>, ApiError>
@@ -131,6 +134,7 @@ where
     BR: BusinessRepository + Clone + 'static,
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
+    RR: RelationshipRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id
         .parse()
@@ -147,5 +151,43 @@ where
         .await?;
     Ok(Json(
         transactions.iter().map(TransactionResponse::from).collect(),
+    ))
+}
+
+/// `GET /businesses/{business_id}/relationships?updated_since=<RFC3339>` —
+/// sama seperti `list_transactions_updated_since`, tapi untuk Relationship
+/// di bawah satu Business tertentu (Relationship bernaung di bawah
+/// Business, bukan langsung di bawah Tenant — lihat
+/// `domain::Relationship`).
+pub async fn list_relationships_updated_since<TR, BR, CR, TxR, RR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+    Path(business_id): Path<String>,
+    Query(query): Query<SyncQuery>,
+) -> Result<Json<Vec<RelationshipResponse>>, ApiError>
+where
+    TR: TenantRepository + Clone + 'static,
+    BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
+    TxR: TransactionRepository + Clone + 'static,
+    RR: RelationshipRepository + Clone + 'static,
+{
+    let business_id: BusinessId = business_id
+        .parse()
+        .map_err(application::ApplicationError::from)?;
+    // Pastikan Business-nya ada dulu (404 kalau tidak) — konsisten dengan
+    // create_relationship dan list_transactions_updated_since.
+    let business = state.business_service.get_business(business_id).await?;
+
+    let since =
+        parse_updated_since(query.updated_since).map_err(application::ApplicationError::from)?;
+    let relationships = state
+        .relationship_service
+        .list_updated_since(business.id(), since)
+        .await?;
+    Ok(Json(
+        relationships
+            .iter()
+            .map(RelationshipResponse::from)
+            .collect(),
     ))
 }
