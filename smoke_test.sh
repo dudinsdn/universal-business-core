@@ -15,6 +15,8 @@
 #             idempotency, soft delete, sync
 # - Transaction: create, customer link, validation, idempotency,
 #                soft delete, sync
+# - Relationship: create, self-relationship rejection, validation,
+#                 idempotency, soft delete, sync
 
 set -uo pipefail
 
@@ -505,7 +507,133 @@ assert_yes "$(deleted_id_is_true "$SYNC_TRANSACTION_ID")" \
   "transaction soft-deleted tetap muncul dengan is_deleted=true"
 
 echo
-echo "=== 10. SOFT DELETE / OPTIMISTIC LOCKING ==="
+echo "=== 10. RELATIONSHIP ==="
+
+echo "--- Create customer kedua untuk relationship ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
+  '{"name":"Ani Wijaya"}')
+check "POST customer kedua untuk relationship" 201 "$STATUS"
+CUSTOMER_B_ID=$(json_value id)
+echo "  customer_b_id = $CUSTOMER_B_ID"
+
+echo "--- Create relationship valid ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
+  '{
+    "from_customer_id":"'"$CUSTOMER_ID"'",
+    "to_customer_id":"'"$CUSTOMER_B_ID"'",
+    "relationship_type":"sibling"
+  }')
+check "POST /businesses/{id}/relationships valid" 201 "$STATUS"
+RELATIONSHIP_ID=$(json_value id)
+echo "  relationship_id = $RELATIONSHIP_ID"
+
+check_json_field "relationship_type" "sibling" \
+  "relationship_type tersimpan sebagai lowercase"
+check_json_field "from_customer_id" "$CUSTOMER_ID" \
+  "relationship from_customer_id sesuai"
+check_json_field "to_customer_id" "$CUSTOMER_B_ID" \
+  "relationship to_customer_id sesuai"
+
+echo "--- Create relationship ke diri sendiri ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
+  '{
+    "from_customer_id":"'"$CUSTOMER_ID"'",
+    "to_customer_id":"'"$CUSTOMER_ID"'",
+    "relationship_type":"sibling"
+  }')
+check "POST relationship self -> 409" 409 "$STATUS"
+check_contains "error" "tidak bisa berelasi dengan dirinya sendiri" \
+  "pesan error self-relationship"
+
+echo "--- Create relationship jenis kosong ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
+  '{
+    "from_customer_id":"'"$CUSTOMER_ID"'",
+    "to_customer_id":"'"$CUSTOMER_B_ID"'",
+    "relationship_type":"   "
+  }')
+check "POST relationship jenis kosong -> 400" 400 "$STATUS"
+
+echo "--- Create relationship jenis invalid ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
+  '{
+    "from_customer_id":"'"$CUSTOMER_ID"'",
+    "to_customer_id":"'"$CUSTOMER_B_ID"'",
+    "relationship_type":"family member!"
+  }')
+check "POST relationship jenis invalid -> 400" 400 "$STATUS"
+
+echo "--- Create relationship business tidak ditemukan ---"
+STATUS=$(req POST \
+  "/businesses/00000000-0000-0000-0000-000000000000/relationships" \
+  '{
+    "from_customer_id":"'"$CUSTOMER_ID"'",
+    "to_customer_id":"'"$CUSTOMER_B_ID"'",
+    "relationship_type":"sibling"
+  }')
+check "POST relationship business tidak ada -> 404" 404 "$STATUS"
+
+echo "--- Idempotent create relationship ---"
+IDEMP_RELATIONSHIP=$(python3 -c 'import uuid; print(uuid.uuid4())')
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
+  '{
+    "id":"'"$IDEMP_RELATIONSHIP"'",
+    "from_customer_id":"'"$CUSTOMER_ID"'",
+    "to_customer_id":"'"$CUSTOMER_B_ID"'",
+    "relationship_type":"referral"
+  }')
+check "POST relationship idempotent pertama" 201 "$STATUS"
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
+  '{
+    "id":"'"$IDEMP_RELATIONSHIP"'",
+    "from_customer_id":"'"$CUSTOMER_ID"'",
+    "to_customer_id":"'"$CUSTOMER_B_ID"'",
+    "relationship_type":"guardian"
+  }')
+check "POST relationship retry -> 200" 200 "$STATUS"
+check_json_field "relationship_type" "referral" \
+  "retry relationship mengembalikan entity pertama"
+
+echo
+echo "=== 11. SYNC RELATIONSHIP ==="
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/relationships")
+check "GET relationships full sync" 200 "$STATUS"
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/relationships?updated_since=abc")
+check "GET relationships invalid timestamp -> 400" 400 "$STATUS"
+
+CURSOR=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+sleep 1
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
+  '{
+    "from_customer_id":"'"$CUSTOMER_ID"'",
+    "to_customer_id":"'"$CUSTOMER_B_ID"'",
+    "relationship_type":"guardian"
+  }')
+check "POST relationship setelah cursor" 201 "$STATUS"
+SYNC_RELATIONSHIP_ID=$(json_value id)
+
+STATUS=$(req GET \
+  "/businesses/$BUSINESS_ID/relationships?updated_since=$CURSOR")
+check "GET incremental relationships" 200 "$STATUS"
+assert_yes "$(contains_id "$SYNC_RELATIONSHIP_ID")" \
+  "relationship baru muncul pada incremental sync"
+
+STATUS=$(req DELETE "/relationships/$SYNC_RELATIONSHIP_ID" \
+  '{"expected_version":0}')
+check "DELETE relationship -> 204" 204 "$STATUS"
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/relationships")
+check "GET relationships setelah soft delete" 200 "$STATUS"
+assert_yes "$(deleted_id_is_true "$SYNC_RELATIONSHIP_ID")" \
+  "relationship soft-deleted tetap muncul dengan is_deleted=true"
+
+echo
+echo "=== 12. SOFT DELETE / OPTIMISTIC LOCKING ==="
 
 echo "--- Business aktif tidak boleh menghapus tenant ---"
 STATUS=$(req DELETE "/tenants/$TENANT_ID" \
