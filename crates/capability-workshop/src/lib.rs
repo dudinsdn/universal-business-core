@@ -12,10 +12,17 @@
 //! bukan keputusan di awal).
 
 pub mod error;
+pub mod in_memory;
+pub mod repository;
+pub mod rules;
 pub mod service_order;
+pub mod service_order_service;
 
-pub use error::WorkshopError;
+pub use error::{RepositoryError, ServiceOrderError, WorkshopError};
+pub use in_memory::InMemoryServiceOrderRepository;
+pub use repository::ServiceOrderRepository;
 pub use service_order::{
     PersistedServiceOrder, ServiceOrder, ServiceOrderDescription, ServiceOrderId,
     ServiceOrderStatus,
 };
+pub use service_order_service::ServiceOrderService;
