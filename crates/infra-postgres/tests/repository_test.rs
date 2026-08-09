@@ -13,17 +13,18 @@
 //! pesan pendamping.
 
 use application::{
-    BusinessRepository, CustomerRepository, RelationshipRepository, RepositoryError,
-    TenantRepository, TransactionRepository,
+    BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
+    RepositoryError, TenantRepository, TransactionRepository,
 };
 use chrono::Utc;
 use domain::{
-    Business, BusinessName, BusinessType, Customer, CustomerName, CustomerPhone, Relationship,
-    RelationshipType, Tenant, TenantName, Transaction, TransactionAmount, TransactionKind,
+    Business, BusinessName, BusinessType, Customer, CustomerName, CustomerPhone, Interaction,
+    InteractionNote, InteractionType, Relationship, RelationshipType, Tenant, TenantName,
+    Transaction, TransactionAmount, TransactionKind,
 };
 use infra_postgres::{
-    PgBusinessRepository, PgCustomerRepository, PgRelationshipRepository, PgTenantRepository,
-    PgTransactionRepository,
+    PgBusinessRepository, PgCustomerRepository, PgInteractionRepository, PgRelationshipRepository,
+    PgTenantRepository, PgTransactionRepository,
 };
 use sqlx::PgPool;
 
@@ -202,6 +203,246 @@ async fn find_updated_since_includes_soft_deleted_tenants(pool: PgPool) -> sqlx:
     repo.save(&tenant).await.unwrap();
 
     let changed = repo.find_updated_since(cursor).await.unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].is_deleted());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_and_find_interaction_roundtrips(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let interaction_repo = PgInteractionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let interaction = Interaction::new(
+        business.id(),
+        customer.id(),
+        InteractionType::new("call").unwrap(),
+        Some(InteractionNote::new("Follow up jadwal kontrol").unwrap()),
+        Utc::now(),
+    );
+    interaction_repo.save(&interaction).await.unwrap();
+
+    let fetched = interaction_repo
+        .find_by_id(interaction.id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(fetched.id(), interaction.id());
+    assert_eq!(fetched.business_id(), business.id());
+    assert_eq!(fetched.customer_id(), customer.id());
+    assert_eq!(fetched.interaction_type().as_str(), "call");
+    assert_eq!(
+        fetched.note().map(|n| n.as_str()),
+        Some("Follow up jadwal kontrol")
+    );
+    assert_eq!(fetched.version(), 0);
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_and_find_interaction_without_note_roundtrips(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let interaction_repo = PgInteractionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let interaction = Interaction::new(
+        business.id(),
+        customer.id(),
+        InteractionType::new("visit").unwrap(),
+        None,
+        Utc::now(),
+    );
+    interaction_repo.save(&interaction).await.unwrap();
+
+    let fetched = interaction_repo
+        .find_by_id(interaction.id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(fetched.note().is_none());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_interaction_by_id_returns_none_when_not_found(pool: PgPool) -> sqlx::Result<()> {
+    let repo = PgInteractionRepository::new(pool);
+    let result = repo.find_by_id(domain::InteractionId::new()).await.unwrap();
+    assert!(result.is_none());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_interaction_detects_version_conflict_at_database_level(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let interaction_repo = PgInteractionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let mut interaction = Interaction::new(
+        business.id(),
+        customer.id(),
+        InteractionType::new("call").unwrap(),
+        None,
+        Utc::now(),
+    );
+    interaction_repo.save(&interaction).await.unwrap();
+
+    // Dua "pembaca" sama-sama mulai dari data versi 0.
+    let mut stale_copy = interaction.clone();
+
+    // Salah satu menang duluan: soft delete, jadi versi 1, berhasil
+    // disimpan.
+    interaction.soft_delete();
+    interaction_repo.save(&interaction).await.unwrap();
+
+    // Yang telat masih berdasarkan versi 0 saat mulai mutasi — mencoba
+    // soft delete juga, tapi versi 0 di penyimpanan sudah tidak ada lagi —
+    // harus ditolak DB.
+    stale_copy.soft_delete();
+    let result = interaction_repo.save(&stale_copy).await;
+
+    assert!(matches!(result, Err(RepositoryError::VersionConflict)));
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_excludes_other_business_for_interaction(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let interaction_repo = PgInteractionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+
+    let business_a = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    let business_b = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik B").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business_a).await.unwrap();
+    business_repo.save(&business_b).await.unwrap();
+
+    let customer_a = Customer::new(business_a.id(), CustomerName::new("Budi").unwrap(), None);
+    let customer_b = Customer::new(business_b.id(), CustomerName::new("Siti").unwrap(), None);
+    customer_repo.save(&customer_a).await.unwrap();
+    customer_repo.save(&customer_b).await.unwrap();
+
+    let interaction_a = Interaction::new(
+        business_a.id(),
+        customer_a.id(),
+        InteractionType::new("call").unwrap(),
+        None,
+        Utc::now(),
+    );
+    let interaction_b = Interaction::new(
+        business_b.id(),
+        customer_b.id(),
+        InteractionType::new("call").unwrap(),
+        None,
+        Utc::now(),
+    );
+    interaction_repo.save(&interaction_a).await.unwrap();
+    interaction_repo.save(&interaction_b).await.unwrap();
+
+    let epoch = chrono::DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+    let changed = interaction_repo
+        .find_updated_since_by_business(business_a.id(), epoch)
+        .await
+        .unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].id(), interaction_a.id());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_includes_soft_deleted_interactions(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let interaction_repo = PgInteractionRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Klinik A").unwrap(),
+        BusinessType::new("clinic").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let mut interaction = Interaction::new(
+        business.id(),
+        customer.id(),
+        InteractionType::new("call").unwrap(),
+        None,
+        Utc::now(),
+    );
+    interaction_repo.save(&interaction).await.unwrap();
+
+    let cursor = Utc::now();
+
+    // Client offline harus tahu soal penghapusan juga.
+    interaction.soft_delete();
+    interaction_repo.save(&interaction).await.unwrap();
+
+    let changed = interaction_repo
+        .find_updated_since_by_business(business.id(), cursor)
+        .await
+        .unwrap();
 
     assert_eq!(changed.len(), 1);
     assert!(changed[0].is_deleted());
