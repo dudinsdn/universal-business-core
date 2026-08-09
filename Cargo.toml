@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "crates/api",
   "crates/application",
+  "crates/capability-workshop",
   "crates/domain",
   "crates/infra-postgres",
 ]
