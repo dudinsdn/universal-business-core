@@ -4,8 +4,8 @@ use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 
 use application::{
-    BusinessRepository, CustomerRepository, RelationshipRepository, TenantRepository,
-    TransactionRepository,
+    BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
+    TenantRepository, TransactionRepository,
 };
 use domain::{
     BusinessId, CustomerId, DomainError, TransactionAmount, TransactionId, TransactionKind,
@@ -28,8 +28,8 @@ fn parse_occurred_at(raw: Option<String>) -> Result<DateTime<Utc>, DomainError> 
     }
 }
 
-pub async fn create_transaction<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn create_transaction<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(business_id): Path<String>,
     Json(payload): Json<CreateTransactionRequest>,
 ) -> Result<(StatusCode, Json<TransactionResponse>), ApiError>
@@ -39,6 +39,7 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id
         .parse()
@@ -74,8 +75,8 @@ where
     Ok((status, Json(TransactionResponse::from(&transaction))))
 }
 
-pub async fn delete_transaction<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn delete_transaction<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -85,6 +86,7 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     let id: TransactionId = id.parse().map_err(application::ApplicationError::from)?;
     state

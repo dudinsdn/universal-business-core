@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use domain::{Business, Customer, Relationship, Tenant, Transaction};
+use domain::{Business, Customer, Interaction, Relationship, Tenant, Transaction};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTenantRequest {
@@ -105,6 +105,27 @@ pub struct CreateRelationshipRequest {
     pub from_customer_id: String,
     pub to_customer_id: String,
     pub relationship_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateInteractionRequest {
+    /// Sama seperti `CreateRelationshipRequest::id` — opsional, untuk
+    /// idempotent create.
+    #[serde(default)]
+    pub id: Option<String>,
+    /// WAJIB (beda dari `CreateTransactionRequest::customer_id` yang
+    /// opsional) — Interaction secara alami selalu tentang seseorang
+    /// (keputusan Din).
+    pub customer_id: String,
+    pub interaction_type: String,
+    /// Catatan singkat opsional (maks 500 karakter) — bukan transkrip
+    /// lengkap, lihat `domain::interaction::InteractionNote`.
+    #[serde(default)]
+    pub note: Option<String>,
+    /// Sama seperti `CreateTransactionRequest::occurred_at` — opsional,
+    /// default ke waktu server saat ini kalau tidak dikirim.
+    #[serde(default)]
+    pub occurred_at: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -225,6 +246,35 @@ impl From<&Relationship> for RelationshipResponse {
             relationship_type: relationship.relationship_type().as_str().to_string(),
             version: relationship.version(),
             is_deleted: relationship.is_deleted(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct InteractionResponse {
+    pub id: String,
+    pub business_id: String,
+    pub customer_id: String,
+    pub interaction_type: String,
+    pub note: Option<String>,
+    pub occurred_at: String,
+    pub version: u32,
+    pub is_deleted: bool,
+}
+
+impl From<&Interaction> for InteractionResponse {
+    fn from(interaction: &Interaction) -> Self {
+        Self {
+            id: interaction.id().to_string(),
+            business_id: interaction.business_id().to_string(),
+            customer_id: interaction.customer_id().to_string(),
+            interaction_type: interaction.interaction_type().as_str().to_string(),
+            note: interaction.note().map(|n| n.as_str().to_string()),
+            occurred_at: interaction
+                .occurred_at()
+                .to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+            version: interaction.version(),
+            is_deleted: interaction.is_deleted(),
         }
     }
 }

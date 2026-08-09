@@ -3,8 +3,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 
 use application::{
-    BusinessRepository, CustomerRepository, RelationshipRepository, TenantRepository,
-    TransactionRepository,
+    BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
+    TenantRepository, TransactionRepository,
 };
 use domain::{BusinessId, BusinessName, BusinessType, TenantId};
 
@@ -12,8 +12,8 @@ use crate::dto::{BusinessResponse, CreateBusinessRequest, DeleteRequest, RenameR
 use crate::error::ApiError;
 use crate::state::SharedState;
 
-pub async fn create_business<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn create_business<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(tenant_id): Path<String>,
     Json(payload): Json<CreateBusinessRequest>,
 ) -> Result<(StatusCode, Json<BusinessResponse>), ApiError>
@@ -23,6 +23,7 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     let tenant_id: TenantId = tenant_id
         .parse()
@@ -50,8 +51,8 @@ where
     Ok((status, Json(BusinessResponse::from(&business))))
 }
 
-pub async fn rename_business<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn rename_business<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(id): Path<String>,
     Json(payload): Json<RenameRequest>,
 ) -> Result<Json<BusinessResponse>, ApiError>
@@ -61,6 +62,7 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     let id: BusinessId = id.parse().map_err(application::ApplicationError::from)?;
     let name = BusinessName::new(payload.name).map_err(application::ApplicationError::from)?;
@@ -71,8 +73,8 @@ where
     Ok(Json(BusinessResponse::from(&business)))
 }
 
-pub async fn delete_business<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn delete_business<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -82,6 +84,7 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     let id: BusinessId = id.parse().map_err(application::ApplicationError::from)?;
     state

@@ -1,4 +1,5 @@
 use api::{AppState, build_router};
+use application::InMemoryInteractionRepository;
 use infra_postgres::{
     PgBusinessRepository, PgCustomerRepository, PgRelationshipRepository, PgTenantRepository,
     PgTransactionRepository, run_migrations,
@@ -25,6 +26,12 @@ async fn main() {
     let customer_repository = PgCustomerRepository::new(pool.clone());
     let transaction_repository = PgTransactionRepository::new(pool.clone());
     let relationship_repository = PgRelationshipRepository::new(pool);
+    // SEMENTARA: belum ada PgInteractionRepository — sesuai Development
+    // Rules, urutan wajibnya "Implementasikan API" (5) mendahului
+    // "Tambahkan database" (6). Data Interaction TIDAK akan persisten
+    // sampai PgInteractionRepository dibuat di langkah database
+    // selanjutnya.
+    let interaction_repository = InMemoryInteractionRepository::new();
 
     let state = AppState::new(
         tenant_repository,
@@ -32,6 +39,7 @@ async fn main() {
         customer_repository,
         transaction_repository,
         relationship_repository,
+        interaction_repository,
     );
     let app = build_router(state);
 
@@ -39,7 +47,9 @@ async fn main() {
         .await
         .expect("gagal bind ke port 3000");
 
-    println!("API berjalan di http://0.0.0.0:3000 (repository: Postgres)");
+    println!(
+        "API berjalan di http://0.0.0.0:3000 (repository: Postgres, kecuali Interaction: in-memory sementara)"
+    );
 
     axum::serve(listener, app)
         .await

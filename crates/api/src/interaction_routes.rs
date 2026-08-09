@@ -1,22 +1,38 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use chrono::{DateTime, Utc};
 
 use application::{
     BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
     TenantRepository, TransactionRepository,
 };
-use domain::{BusinessId, CustomerId, RelationshipId, RelationshipType};
+use domain::{
+    BusinessId, CustomerId, DomainError, InteractionId, InteractionNote, InteractionType,
+};
 
-use crate::dto::{CreateRelationshipRequest, DeleteRequest, RelationshipResponse};
+use crate::dto::{CreateInteractionRequest, DeleteRequest, InteractionResponse};
 use crate::error::ApiError;
 use crate::state::SharedState;
 
-pub async fn create_relationship<TR, BR, CR, TxR, RR, IR>(
+/// Parse `occurred_at` (RFC 3339). Sama seperti
+/// `transaction_routes::parse_occurred_at` — default-nya waktu SEKARANG
+/// (bukan epoch), karena kalau client tidak mengirim `occurred_at`,
+/// kontak dianggap terjadi saat request ini diterima server.
+fn parse_occurred_at(raw: Option<String>) -> Result<DateTime<Utc>, DomainError> {
+    match raw {
+        None => Ok(Utc::now()),
+        Some(raw) => DateTime::parse_from_rfc3339(&raw)
+            .map(|dt| dt.with_timezone(&Utc))
+            .map_err(|_| DomainError::InvalidTimestamp),
+    }
+}
+
+pub async fn create_interaction<TR, BR, CR, TxR, RR, IR>(
     State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(business_id): Path<String>,
-    Json(payload): Json<CreateRelationshipRequest>,
-) -> Result<(StatusCode, Json<RelationshipResponse>), ApiError>
+    Json(payload): Json<CreateInteractionRequest>,
+) -> Result<(StatusCode, Json<InteractionResponse>), ApiError>
 where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
@@ -30,31 +46,35 @@ where
         .map_err(application::ApplicationError::from)?;
     let business = state.business_service.get_business(business_id).await?;
 
-    // Idempotency: sama seperti create_transaction — lihat komentar di
+    // Idempotency: sama seperti create_relationship — lihat komentar di
     // sana.
     let id = match payload.id {
         Some(raw) => raw.parse().map_err(application::ApplicationError::from)?,
-        None => RelationshipId::new(),
+        None => InteractionId::new(),
     };
-    let from_customer_id: CustomerId = payload
-        .from_customer_id
+    let customer_id: CustomerId = payload
+        .customer_id
         .parse()
         .map_err(application::ApplicationError::from)?;
-    let to_customer_id: CustomerId = payload
-        .to_customer_id
-        .parse()
+    let interaction_type = InteractionType::new(payload.interaction_type)
         .map_err(application::ApplicationError::from)?;
-    let relationship_type = RelationshipType::new(payload.relationship_type)
+    let note = payload
+        .note
+        .map(InteractionNote::new)
+        .transpose()
         .map_err(application::ApplicationError::from)?;
+    let occurred_at =
+        parse_occurred_at(payload.occurred_at).map_err(application::ApplicationError::from)?;
 
-    let (relationship, created) = state
-        .relationship_service
-        .create_relationship(
+    let (interaction, created) = state
+        .interaction_service
+        .create_interaction(
             &business,
             id,
-            from_customer_id,
-            to_customer_id,
-            relationship_type,
+            customer_id,
+            interaction_type,
+            note,
+            occurred_at,
         )
         .await?;
     let status = if created {
@@ -62,10 +82,10 @@ where
     } else {
         StatusCode::OK
     };
-    Ok((status, Json(RelationshipResponse::from(&relationship))))
+    Ok((status, Json(InteractionResponse::from(&interaction))))
 }
 
-pub async fn delete_relationship<TR, BR, CR, TxR, RR, IR>(
+pub async fn delete_interaction<TR, BR, CR, TxR, RR, IR>(
     State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
@@ -78,10 +98,10 @@ where
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
 {
-    let id: RelationshipId = id.parse().map_err(application::ApplicationError::from)?;
+    let id: InteractionId = id.parse().map_err(application::ApplicationError::from)?;
     state
-        .relationship_service
-        .delete_relationship(id, payload.expected_version)
+        .interaction_service
+        .delete_interaction(id, payload.expected_version)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

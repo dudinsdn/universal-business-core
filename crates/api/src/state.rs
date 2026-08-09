@@ -2,17 +2,17 @@ use std::sync::Arc;
 
 use application::{
     BusinessRepository, BusinessService, CustomerRepository, CustomerService,
-    InMemoryBusinessRepository, InMemoryCustomerRepository, InMemoryRelationshipRepository,
-    InMemoryTenantRepository, InMemoryTransactionRepository, RelationshipRepository,
-    RelationshipService, TenantRepository, TenantService, TransactionRepository,
-    TransactionService,
+    InMemoryBusinessRepository, InMemoryCustomerRepository, InMemoryInteractionRepository,
+    InMemoryRelationshipRepository, InMemoryTenantRepository, InMemoryTransactionRepository,
+    InteractionRepository, InteractionService, RelationshipRepository, RelationshipService,
+    TenantRepository, TenantService, TransactionRepository, TransactionService,
 };
 
 /// State yang dibagi ke semua handler.
 ///
-/// Generik atas tipe Repository (`TR`, `BR`, `CR`, `TxR`, `RR`) — bukan
-/// cuma "boleh generik secara teori", ini alasan trait Repository dibuat
-/// sejak awal: production (`main.rs`) memasangnya dengan
+/// Generik atas tipe Repository (`TR`, `BR`, `CR`, `TxR`, `RR`, `IR`) —
+/// bukan cuma "boleh generik secara teori", ini alasan trait Repository
+/// dibuat sejak awal: production (`main.rs`) memasangnya dengan
 /// `PgTenantRepository`/`PgBusinessRepository`/dst, test
 /// (`tests/tenant_flow.rs`) memasangnya dengan repository in-memory —
 /// tanpa satu baris pun kode handler yang beda antara keduanya.
@@ -22,12 +22,14 @@ pub struct AppState<
     CR: CustomerRepository,
     TxR: TransactionRepository,
     RR: RelationshipRepository,
+    IR: InteractionRepository,
 > {
     pub tenant_service: TenantService<TR>,
     pub business_service: BusinessService<BR>,
     pub customer_service: CustomerService<CR>,
     pub transaction_service: TransactionService<TxR>,
     pub relationship_service: RelationshipService<RR>,
+    pub interaction_service: InteractionService<IR>,
     /// Dipakai langsung (bukan lewat service) khusus untuk
     /// `delete_tenant`, yang butuh `BusinessRepository` sebagai parameter
     /// eksplisit karena itu operasi lintas-aggregate.
@@ -37,7 +39,7 @@ pub struct AppState<
 /// Alias untuk `Arc<AppState<...>>` — dipakai di parameter `State<...>`
 /// setiap handler supaya signature-nya tidak "very complex type" menurut
 /// clippy. Murni penyederhanaan tulisan, bukan perubahan tipe.
-pub type SharedState<TR, BR, CR, TxR, RR> = Arc<AppState<TR, BR, CR, TxR, RR>>;
+pub type SharedState<TR, BR, CR, TxR, RR, IR> = Arc<AppState<TR, BR, CR, TxR, RR, IR>>;
 
 impl<
     TR: TenantRepository,
@@ -45,7 +47,8 @@ impl<
     CR: CustomerRepository,
     TxR: TransactionRepository,
     RR: RelationshipRepository,
-> AppState<TR, BR, CR, TxR, RR>
+    IR: InteractionRepository,
+> AppState<TR, BR, CR, TxR, RR, IR>
 {
     pub fn new(
         tenant_repository: TR,
@@ -53,6 +56,7 @@ impl<
         customer_repository: CR,
         transaction_repository: TxR,
         relationship_repository: RR,
+        interaction_repository: IR,
     ) -> Self {
         Self {
             tenant_service: TenantService::new(tenant_repository),
@@ -60,6 +64,7 @@ impl<
             customer_service: CustomerService::new(customer_repository),
             transaction_service: TransactionService::new(transaction_repository),
             relationship_service: RelationshipService::new(relationship_repository),
+            interaction_service: InteractionService::new(interaction_repository),
             business_repository,
         }
     }
@@ -67,7 +72,7 @@ impl<
 
 /// Konstruktor khusus untuk test — repository in-memory, tidak butuh
 /// Postgres sama sekali. Cuma tersedia untuk kombinasi tipe in-memory,
-/// bukan untuk TR/BR/CR/TxR/RR generik apa pun (lihat `AppState::new`
+/// bukan untuk TR/BR/CR/TxR/RR/IR generik apa pun (lihat `AppState::new`
 /// untuk itu).
 impl
     AppState<
@@ -76,6 +81,7 @@ impl
         InMemoryCustomerRepository,
         InMemoryTransactionRepository,
         InMemoryRelationshipRepository,
+        InMemoryInteractionRepository,
     >
 {
     pub fn new_in_memory() -> Self {
@@ -85,6 +91,7 @@ impl
             InMemoryCustomerRepository::new(),
             InMemoryTransactionRepository::new(),
             InMemoryRelationshipRepository::new(),
+            InMemoryInteractionRepository::new(),
         )
     }
 }

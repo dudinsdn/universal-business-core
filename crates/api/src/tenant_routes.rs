@@ -3,8 +3,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 
 use application::{
-    BusinessRepository, CustomerRepository, RelationshipRepository, TenantRepository,
-    TransactionRepository,
+    BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
+    TenantRepository, TransactionRepository,
 };
 use domain::{TenantId, TenantName};
 
@@ -12,8 +12,8 @@ use crate::dto::{CreateTenantRequest, DeleteRequest, RenameRequest, TenantRespon
 use crate::error::ApiError;
 use crate::state::SharedState;
 
-pub async fn create_tenant<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn create_tenant<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Json(payload): Json<CreateTenantRequest>,
 ) -> Result<(StatusCode, Json<TenantResponse>), ApiError>
 where
@@ -22,6 +22,7 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     // Idempotency: kalau client kirim `id` sendiri, dipakai apa adanya
     // (retry request dengan `id` yang sama tidak akan membuat duplikat —
@@ -42,8 +43,8 @@ where
     Ok((status, Json(TenantResponse::from(&tenant))))
 }
 
-pub async fn get_tenant<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn get_tenant<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(id): Path<String>,
 ) -> Result<Json<TenantResponse>, ApiError>
 where
@@ -52,14 +53,15 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     let id: TenantId = id.parse().map_err(application::ApplicationError::from)?;
     let tenant = state.tenant_service.get_tenant(id).await?;
     Ok(Json(TenantResponse::from(&tenant)))
 }
 
-pub async fn rename_tenant<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn rename_tenant<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(id): Path<String>,
     Json(payload): Json<RenameRequest>,
 ) -> Result<Json<TenantResponse>, ApiError>
@@ -69,6 +71,7 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     let id: TenantId = id.parse().map_err(application::ApplicationError::from)?;
     let name = TenantName::new(payload.name).map_err(application::ApplicationError::from)?;
@@ -79,8 +82,8 @@ where
     Ok(Json(TenantResponse::from(&tenant)))
 }
 
-pub async fn delete_tenant<TR, BR, CR, TxR, RR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR>>,
+pub async fn delete_tenant<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -90,6 +93,7 @@ where
     CR: CustomerRepository + Clone + 'static,
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
+    IR: InteractionRepository + Clone + 'static,
 {
     let id: TenantId = id.parse().map_err(application::ApplicationError::from)?;
     state
