@@ -17,6 +17,8 @@
 #                soft delete, sync
 # - Relationship: create, self-relationship rejection, validation,
 #                 idempotency, soft delete, sync
+# - Interaction: create, note opsional, validation, idempotency,
+#                soft delete, sync
 
 set -uo pipefail
 
@@ -633,7 +635,129 @@ assert_yes "$(deleted_id_is_true "$SYNC_RELATIONSHIP_ID")" \
   "relationship soft-deleted tetap muncul dengan is_deleted=true"
 
 echo
-echo "=== 12. SOFT DELETE / OPTIMISTIC LOCKING ==="
+echo "=== 12. INTERACTION ==="
+
+echo "--- Create interaction dengan note ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
+  '{
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"call",
+    "note":"Follow up jadwal kontrol",
+    "occurred_at":"2026-08-08T02:00:00Z"
+  }')
+check "POST /businesses/{id}/interactions valid" 201 "$STATUS"
+INTERACTION_ID=$(json_value id)
+echo "  interaction_id = $INTERACTION_ID"
+
+check_json_field "interaction_type" "call" \
+  "interaction_type tersimpan sebagai lowercase"
+check_json_field "customer_id" "$CUSTOMER_ID" \
+  "interaction terhubung ke customer"
+check_json_field "note" "Follow up jadwal kontrol" \
+  "interaction note tersimpan"
+
+echo "--- Create interaction tanpa note ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
+  '{
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"visit"
+  }')
+check "POST interaction tanpa note -> 201" 201 "$STATUS"
+check_json_field "note" "None" \
+  "interaction tanpa note tersimpan sebagai null"
+
+echo "--- Create interaction note kosong ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
+  '{
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"call",
+    "note":"   "
+  }')
+check "POST interaction note kosong -> 400" 400 "$STATUS"
+
+echo "--- Create interaction jenis kosong ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
+  '{
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"   "
+  }')
+check "POST interaction jenis kosong -> 400" 400 "$STATUS"
+
+echo "--- Create interaction jenis invalid ---"
+STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
+  '{
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"phone call!"
+  }')
+check "POST interaction jenis invalid -> 400" 400 "$STATUS"
+
+echo "--- Create interaction business tidak ditemukan ---"
+STATUS=$(req POST \
+  "/businesses/00000000-0000-0000-0000-000000000000/interactions" \
+  '{
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"call"
+  }')
+check "POST interaction business tidak ada -> 404" 404 "$STATUS"
+
+echo "--- Idempotent create interaction ---"
+IDEMP_INTERACTION=$(python3 -c 'import uuid; print(uuid.uuid4())')
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
+  '{
+    "id":"'"$IDEMP_INTERACTION"'",
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"call"
+  }')
+check "POST interaction idempotent pertama" 201 "$STATUS"
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
+  '{
+    "id":"'"$IDEMP_INTERACTION"'",
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"visit"
+  }')
+check "POST interaction retry -> 200" 200 "$STATUS"
+check_json_field "interaction_type" "call" \
+  "retry interaction mengembalikan entity pertama"
+
+echo
+echo "=== 13. SYNC INTERACTION ==="
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/interactions")
+check "GET interactions full sync" 200 "$STATUS"
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/interactions?updated_since=abc")
+check "GET interactions invalid timestamp -> 400" 400 "$STATUS"
+
+CURSOR=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+sleep 1
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
+  '{
+    "customer_id":"'"$CUSTOMER_ID"'",
+    "interaction_type":"email"
+  }')
+check "POST interaction setelah cursor" 201 "$STATUS"
+SYNC_INTERACTION_ID=$(json_value id)
+
+STATUS=$(req GET \
+  "/businesses/$BUSINESS_ID/interactions?updated_since=$CURSOR")
+check "GET incremental interactions" 200 "$STATUS"
+assert_yes "$(contains_id "$SYNC_INTERACTION_ID")" \
+  "interaction baru muncul pada incremental sync"
+
+STATUS=$(req DELETE "/interactions/$SYNC_INTERACTION_ID" \
+  '{"expected_version":0}')
+check "DELETE interaction -> 204" 204 "$STATUS"
+
+STATUS=$(req GET "/businesses/$BUSINESS_ID/interactions")
+check "GET interactions setelah soft delete" 200 "$STATUS"
+assert_yes "$(deleted_id_is_true "$SYNC_INTERACTION_ID")" \
+  "interaction soft-deleted tetap muncul dengan is_deleted=true"
+
+echo
+echo "=== 14. SOFT DELETE / OPTIMISTIC LOCKING ==="
 
 echo "--- Business aktif tidak boleh menghapus tenant ---"
 STATUS=$(req DELETE "/tenants/$TENANT_ID" \
