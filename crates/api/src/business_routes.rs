@@ -6,14 +6,15 @@ use application::{
     BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
     TenantRepository, TransactionRepository,
 };
+use capability_workshop::ServiceOrderRepository;
 use domain::{BusinessId, BusinessName, BusinessType, TenantId};
 
 use crate::dto::{BusinessResponse, CreateBusinessRequest, DeleteRequest, RenameRequest};
 use crate::error::ApiError;
 use crate::state::SharedState;
 
-pub async fn create_business<TR, BR, CR, TxR, RR, IR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
+pub async fn create_business<TR, BR, CR, TxR, RR, IR, SR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR, SR>>,
     Path(tenant_id): Path<String>,
     Json(payload): Json<CreateBusinessRequest>,
 ) -> Result<(StatusCode, Json<BusinessResponse>), ApiError>
@@ -24,6 +25,7 @@ where
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
+    SR: ServiceOrderRepository + Clone + 'static,
 {
     let tenant_id: TenantId = tenant_id
         .parse()
@@ -51,8 +53,8 @@ where
     Ok((status, Json(BusinessResponse::from(&business))))
 }
 
-pub async fn rename_business<TR, BR, CR, TxR, RR, IR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
+pub async fn rename_business<TR, BR, CR, TxR, RR, IR, SR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR, SR>>,
     Path(id): Path<String>,
     Json(payload): Json<RenameRequest>,
 ) -> Result<Json<BusinessResponse>, ApiError>
@@ -63,6 +65,7 @@ where
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
+    SR: ServiceOrderRepository + Clone + 'static,
 {
     let id: BusinessId = id.parse().map_err(application::ApplicationError::from)?;
     let name = BusinessName::new(payload.name).map_err(application::ApplicationError::from)?;
@@ -73,8 +76,8 @@ where
     Ok(Json(BusinessResponse::from(&business)))
 }
 
-pub async fn delete_business<TR, BR, CR, TxR, RR, IR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
+pub async fn delete_business<TR, BR, CR, TxR, RR, IR, SR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR, SR>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -85,6 +88,7 @@ where
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
+    SR: ServiceOrderRepository + Clone + 'static,
 {
     let id: BusinessId = id.parse().map_err(application::ApplicationError::from)?;
     state

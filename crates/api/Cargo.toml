@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 application = { path = "../application" }
+capability-workshop = { path = "../capability-workshop" }
 domain = { path = "../domain" }
 infra-postgres = { path = "../infra-postgres" }
 axum = { workspace = true }

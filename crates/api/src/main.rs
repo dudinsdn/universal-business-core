@@ -1,7 +1,7 @@
 use api::{AppState, build_router};
 use infra_postgres::{
     PgBusinessRepository, PgCustomerRepository, PgInteractionRepository, PgRelationshipRepository,
-    PgTenantRepository, PgTransactionRepository, run_migrations,
+    PgServiceOrderRepository, PgTenantRepository, PgTransactionRepository, run_migrations,
 };
 use sqlx::postgres::PgPoolOptions;
 
@@ -25,7 +25,8 @@ async fn main() {
     let customer_repository = PgCustomerRepository::new(pool.clone());
     let transaction_repository = PgTransactionRepository::new(pool.clone());
     let relationship_repository = PgRelationshipRepository::new(pool.clone());
-    let interaction_repository = PgInteractionRepository::new(pool);
+    let interaction_repository = PgInteractionRepository::new(pool.clone());
+    let service_order_repository = PgServiceOrderRepository::new(pool);
 
     let state = AppState::new(
         tenant_repository,
@@ -34,6 +35,7 @@ async fn main() {
         transaction_repository,
         relationship_repository,
         interaction_repository,
+        service_order_repository,
     );
     let app = build_router(state);
 

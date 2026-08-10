@@ -113,6 +113,27 @@ impl ServiceOrderStatus {
     }
 }
 
+/// Dipakai Repository konkret (infra-postgres) untuk merekonstruksi
+/// status dari kolom TEXT. Error `UnknownStatus` seharusnya tidak pernah
+/// terjadi lewat jalur normal aplikasi — jaga-jaga terhadap data yang
+/// diubah manual di luar aplikasi, pola sama seperti validasi ulang
+/// `TenantName`/`BusinessType` di Repository Core.
+impl std::str::FromStr for ServiceOrderStatus {
+    type Err = WorkshopError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "received" => Ok(ServiceOrderStatus::Received),
+            "in_progress" => Ok(ServiceOrderStatus::InProgress),
+            "completed" => Ok(ServiceOrderStatus::Completed),
+            "cancelled" => Ok(ServiceOrderStatus::Cancelled),
+            other => Err(WorkshopError::UnknownStatus {
+                value: other.to_string(),
+            }),
+        }
+    }
+}
+
 /// Data mentah untuk merekonstruksi ServiceOrder dari penyimpanan. Sama
 /// alasannya dengan `PersistedBusiness`/`PersistedTransaction` di Core:
 /// menghindari constructor dengan terlalu banyak parameter.

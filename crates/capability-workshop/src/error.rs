@@ -37,6 +37,12 @@ pub enum WorkshopError {
     /// Optimistic locking di level business rule: `expected_version` yang
     /// dikirim client tidak sama dengan `version` yang tersimpan.
     VersionConflict,
+    /// Nilai status yang tersimpan di database tidak dikenal
+    /// `ServiceOrderStatus`. Seharusnya tidak pernah terjadi lewat jalur
+    /// normal aplikasi — lihat komentar di `ServiceOrderStatus::from_str`.
+    UnknownStatus {
+        value: String,
+    },
 }
 
 impl fmt::Display for WorkshopError {
@@ -58,6 +64,9 @@ impl fmt::Display for WorkshopError {
                 f,
                 "versi data tidak sesuai, kemungkinan data sudah diubah pihak lain"
             ),
+            WorkshopError::UnknownStatus { value } => {
+                write!(f, "status service order tidak dikenal: {value}")
+            }
         }
     }
 }

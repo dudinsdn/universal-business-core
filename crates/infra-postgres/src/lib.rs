@@ -2,6 +2,7 @@ pub mod business_repository;
 pub mod customer_repository;
 pub mod interaction_repository;
 pub mod relationship_repository;
+pub mod service_order_repository;
 pub mod tenant_repository;
 pub mod transaction_repository;
 
@@ -9,6 +10,7 @@ pub use business_repository::PgBusinessRepository;
 pub use customer_repository::PgCustomerRepository;
 pub use interaction_repository::PgInteractionRepository;
 pub use relationship_repository::PgRelationshipRepository;
+pub use service_order_repository::PgServiceOrderRepository;
 pub use tenant_repository::PgTenantRepository;
 pub use transaction_repository::PgTransactionRepository;
 

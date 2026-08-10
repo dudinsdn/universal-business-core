@@ -23,6 +23,7 @@ version = "0.1.0"
 dependencies = [
  "application",
  "axum",
+ "capability-workshop",
  "chrono",
  "domain",
  "http-body-util",
@@ -767,6 +768,7 @@ name = "infra-postgres"
 version = "0.1.0"
 dependencies = [
  "application",
+ "capability-workshop",
  "chrono",
  "domain",
  "sqlx",

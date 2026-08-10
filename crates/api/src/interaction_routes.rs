@@ -7,6 +7,7 @@ use application::{
     BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
     TenantRepository, TransactionRepository,
 };
+use capability_workshop::ServiceOrderRepository;
 use domain::{
     BusinessId, CustomerId, DomainError, InteractionId, InteractionNote, InteractionType,
 };
@@ -28,8 +29,8 @@ fn parse_occurred_at(raw: Option<String>) -> Result<DateTime<Utc>, DomainError> 
     }
 }
 
-pub async fn create_interaction<TR, BR, CR, TxR, RR, IR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
+pub async fn create_interaction<TR, BR, CR, TxR, RR, IR, SR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR, SR>>,
     Path(business_id): Path<String>,
     Json(payload): Json<CreateInteractionRequest>,
 ) -> Result<(StatusCode, Json<InteractionResponse>), ApiError>
@@ -40,6 +41,7 @@ where
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
+    SR: ServiceOrderRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id
         .parse()
@@ -85,8 +87,8 @@ where
     Ok((status, Json(InteractionResponse::from(&interaction))))
 }
 
-pub async fn delete_interaction<TR, BR, CR, TxR, RR, IR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
+pub async fn delete_interaction<TR, BR, CR, TxR, RR, IR, SR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR, SR>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -97,6 +99,7 @@ where
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
+    SR: ServiceOrderRepository + Clone + 'static,
 {
     let id: InteractionId = id.parse().map_err(application::ApplicationError::from)?;
     state

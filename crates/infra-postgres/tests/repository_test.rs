@@ -16,6 +16,7 @@ use application::{
     BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
     RepositoryError, TenantRepository, TransactionRepository,
 };
+use capability_workshop::{ServiceOrder, ServiceOrderDescription, ServiceOrderRepository};
 use chrono::Utc;
 use domain::{
     Business, BusinessName, BusinessType, Customer, CustomerName, CustomerPhone, Interaction,
@@ -24,7 +25,7 @@ use domain::{
 };
 use infra_postgres::{
     PgBusinessRepository, PgCustomerRepository, PgInteractionRepository, PgRelationshipRepository,
-    PgTenantRepository, PgTransactionRepository,
+    PgServiceOrderRepository, PgTenantRepository, PgTransactionRepository,
 };
 use sqlx::PgPool;
 
@@ -1062,6 +1063,261 @@ async fn find_updated_since_by_business_includes_soft_deleted_customers(
     customer_repo.save(&customer).await.unwrap();
 
     let changed = customer_repo
+        .find_updated_since_by_business(business.id(), cursor)
+        .await
+        .unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].is_deleted());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_and_find_service_order_roundtrips(pool: PgPool) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let service_order_repo = PgServiceOrderRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Bengkel Jaya").unwrap(),
+        BusinessType::new("workshop").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let order = ServiceOrder::new(
+        business.id(),
+        customer.id(),
+        ServiceOrderDescription::new("Ganti oli dan servis rem").unwrap(),
+    );
+    service_order_repo.save(&order).await.unwrap();
+
+    let fetched = service_order_repo
+        .find_by_id(order.id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(fetched.id(), order.id());
+    assert_eq!(fetched.business_id(), business.id());
+    assert_eq!(fetched.customer_id(), customer.id());
+    assert_eq!(fetched.description().as_str(), "Ganti oli dan servis rem");
+    assert_eq!(
+        fetched.status(),
+        capability_workshop::ServiceOrderStatus::Received
+    );
+    assert!(fetched.transaction_id().is_none());
+    assert_eq!(fetched.version(), 0);
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_service_order_by_id_returns_none_when_not_found(pool: PgPool) -> sqlx::Result<()> {
+    let repo = PgServiceOrderRepository::new(pool);
+    let result = repo
+        .find_by_id(capability_workshop::ServiceOrderId::new())
+        .await
+        .unwrap();
+    assert!(result.is_none());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_service_order_persists_status_and_transaction_link_after_transitions(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let transaction_repo = PgTransactionRepository::new(pool.clone());
+    let service_order_repo = PgServiceOrderRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Bengkel Jaya").unwrap(),
+        BusinessType::new("workshop").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+    let transaction = Transaction::new(
+        business.id(),
+        Some(customer.id()),
+        TransactionKind::new("service").unwrap(),
+        TransactionAmount::new(150_000).unwrap(),
+        Utc::now(),
+    );
+    transaction_repo.save(&transaction).await.unwrap();
+
+    let mut order = ServiceOrder::new(
+        business.id(),
+        customer.id(),
+        ServiceOrderDescription::new("Ganti kampas rem").unwrap(),
+    );
+    service_order_repo.save(&order).await.unwrap();
+
+    order.start().unwrap();
+    service_order_repo.save(&order).await.unwrap();
+
+    order.complete(Some(transaction.id())).unwrap();
+    service_order_repo.save(&order).await.unwrap();
+
+    let fetched = service_order_repo
+        .find_by_id(order.id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        fetched.status(),
+        capability_workshop::ServiceOrderStatus::Completed
+    );
+    assert_eq!(fetched.transaction_id(), Some(transaction.id()));
+    assert_eq!(fetched.version(), 2);
+    Ok(())
+}
+
+#[sqlx::test]
+async fn save_service_order_detects_version_conflict_at_database_level(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let service_order_repo = PgServiceOrderRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Bengkel Jaya").unwrap(),
+        BusinessType::new("workshop").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let mut order = ServiceOrder::new(
+        business.id(),
+        customer.id(),
+        ServiceOrderDescription::new("Ganti oli").unwrap(),
+    );
+    service_order_repo.save(&order).await.unwrap();
+
+    // Dua "pembaca" sama-sama mulai dari data versi 0.
+    let mut stale_copy = order.clone();
+
+    // Salah satu menang duluan: start(), jadi versi 1, berhasil disimpan.
+    order.start().unwrap();
+    service_order_repo.save(&order).await.unwrap();
+
+    // Yang telat masih berdasarkan versi 0 — mencoba cancel() juga, tapi
+    // versi 0 di penyimpanan sudah tidak ada lagi — harus ditolak DB.
+    stale_copy.cancel().unwrap();
+    let result = service_order_repo.save(&stale_copy).await;
+
+    assert!(matches!(
+        result,
+        Err(capability_workshop::RepositoryError::VersionConflict)
+    ));
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_excludes_other_business_for_service_order(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let service_order_repo = PgServiceOrderRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+
+    let business_a = Business::new(
+        tenant.id(),
+        BusinessName::new("Bengkel A").unwrap(),
+        BusinessType::new("workshop").unwrap(),
+    );
+    let business_b = Business::new(
+        tenant.id(),
+        BusinessName::new("Bengkel B").unwrap(),
+        BusinessType::new("workshop").unwrap(),
+    );
+    business_repo.save(&business_a).await.unwrap();
+    business_repo.save(&business_b).await.unwrap();
+
+    let customer_a = Customer::new(business_a.id(), CustomerName::new("Budi").unwrap(), None);
+    let customer_b = Customer::new(business_b.id(), CustomerName::new("Siti").unwrap(), None);
+    customer_repo.save(&customer_a).await.unwrap();
+    customer_repo.save(&customer_b).await.unwrap();
+
+    let order_a = ServiceOrder::new(
+        business_a.id(),
+        customer_a.id(),
+        ServiceOrderDescription::new("Ganti oli").unwrap(),
+    );
+    let order_b = ServiceOrder::new(
+        business_b.id(),
+        customer_b.id(),
+        ServiceOrderDescription::new("Ganti oli").unwrap(),
+    );
+    service_order_repo.save(&order_a).await.unwrap();
+    service_order_repo.save(&order_b).await.unwrap();
+
+    let epoch = chrono::DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+    let changed = service_order_repo
+        .find_updated_since_by_business(business_a.id(), epoch)
+        .await
+        .unwrap();
+
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].id(), order_a.id());
+    Ok(())
+}
+
+#[sqlx::test]
+async fn find_updated_since_by_business_includes_soft_deleted_service_orders(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let tenant_repo = PgTenantRepository::new(pool.clone());
+    let business_repo = PgBusinessRepository::new(pool.clone());
+    let customer_repo = PgCustomerRepository::new(pool.clone());
+    let service_order_repo = PgServiceOrderRepository::new(pool);
+
+    let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
+    tenant_repo.save(&tenant).await.unwrap();
+    let business = Business::new(
+        tenant.id(),
+        BusinessName::new("Bengkel Jaya").unwrap(),
+        BusinessType::new("workshop").unwrap(),
+    );
+    business_repo.save(&business).await.unwrap();
+    let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
+    customer_repo.save(&customer).await.unwrap();
+
+    let mut order = ServiceOrder::new(
+        business.id(),
+        customer.id(),
+        ServiceOrderDescription::new("Ganti oli").unwrap(),
+    );
+    service_order_repo.save(&order).await.unwrap();
+
+    let cursor = Utc::now();
+
+    // Client offline harus tahu soal penghapusan juga.
+    order.soft_delete();
+    service_order_repo.save(&order).await.unwrap();
+
+    let changed = service_order_repo
         .find_updated_since_by_business(business.id(), cursor)
         .await
         .unwrap();

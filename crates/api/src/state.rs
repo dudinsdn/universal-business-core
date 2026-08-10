@@ -7,15 +7,23 @@ use application::{
     InteractionRepository, InteractionService, RelationshipRepository, RelationshipService,
     TenantRepository, TenantService, TransactionRepository, TransactionService,
 };
+use capability_workshop::{
+    InMemoryServiceOrderRepository, ServiceOrderRepository, ServiceOrderService,
+};
 
 /// State yang dibagi ke semua handler.
 ///
-/// Generik atas tipe Repository (`TR`, `BR`, `CR`, `TxR`, `RR`, `IR`) —
-/// bukan cuma "boleh generik secara teori", ini alasan trait Repository
+/// Generik atas tipe Repository (`TR`, `BR`, `CR`, `TxR`, `RR`, `IR`, `SR`)
+/// — bukan cuma "boleh generik secara teori", ini alasan trait Repository
 /// dibuat sejak awal: production (`main.rs`) memasangnya dengan
 /// `PgTenantRepository`/`PgBusinessRepository`/dst, test
 /// (`tests/tenant_flow.rs`) memasangnya dengan repository in-memory —
 /// tanpa satu baris pun kode handler yang beda antara keduanya.
+///
+/// `SR` (`ServiceOrderRepository`) adalah repository Capability Workshop
+/// — dari luar Core, tapi tetap dipasang lewat pola generik yang sama
+/// supaya `api` tidak perlu tahu implementasi konkretnya (Postgres belum
+/// ada untuk ServiceOrder di tahap ini, lihat `main.rs`).
 pub struct AppState<
     TR: TenantRepository,
     BR: BusinessRepository,
@@ -23,6 +31,7 @@ pub struct AppState<
     TxR: TransactionRepository,
     RR: RelationshipRepository,
     IR: InteractionRepository,
+    SR: ServiceOrderRepository,
 > {
     pub tenant_service: TenantService<TR>,
     pub business_service: BusinessService<BR>,
@@ -30,6 +39,7 @@ pub struct AppState<
     pub transaction_service: TransactionService<TxR>,
     pub relationship_service: RelationshipService<RR>,
     pub interaction_service: InteractionService<IR>,
+    pub service_order_service: ServiceOrderService<SR>,
     /// Dipakai langsung (bukan lewat service) khusus untuk
     /// `delete_tenant`, yang butuh `BusinessRepository` sebagai parameter
     /// eksplisit karena itu operasi lintas-aggregate.
@@ -39,7 +49,7 @@ pub struct AppState<
 /// Alias untuk `Arc<AppState<...>>` — dipakai di parameter `State<...>`
 /// setiap handler supaya signature-nya tidak "very complex type" menurut
 /// clippy. Murni penyederhanaan tulisan, bukan perubahan tipe.
-pub type SharedState<TR, BR, CR, TxR, RR, IR> = Arc<AppState<TR, BR, CR, TxR, RR, IR>>;
+pub type SharedState<TR, BR, CR, TxR, RR, IR, SR> = Arc<AppState<TR, BR, CR, TxR, RR, IR, SR>>;
 
 impl<
     TR: TenantRepository,
@@ -48,7 +58,8 @@ impl<
     TxR: TransactionRepository,
     RR: RelationshipRepository,
     IR: InteractionRepository,
-> AppState<TR, BR, CR, TxR, RR, IR>
+    SR: ServiceOrderRepository,
+> AppState<TR, BR, CR, TxR, RR, IR, SR>
 {
     pub fn new(
         tenant_repository: TR,
@@ -57,6 +68,7 @@ impl<
         transaction_repository: TxR,
         relationship_repository: RR,
         interaction_repository: IR,
+        service_order_repository: SR,
     ) -> Self {
         Self {
             tenant_service: TenantService::new(tenant_repository),
@@ -65,6 +77,7 @@ impl<
             transaction_service: TransactionService::new(transaction_repository),
             relationship_service: RelationshipService::new(relationship_repository),
             interaction_service: InteractionService::new(interaction_repository),
+            service_order_service: ServiceOrderService::new(service_order_repository),
             business_repository,
         }
     }
@@ -72,7 +85,7 @@ impl<
 
 /// Konstruktor khusus untuk test — repository in-memory, tidak butuh
 /// Postgres sama sekali. Cuma tersedia untuk kombinasi tipe in-memory,
-/// bukan untuk TR/BR/CR/TxR/RR/IR generik apa pun (lihat `AppState::new`
+/// bukan untuk TR/BR/CR/TxR/RR/IR/SR generik apa pun (lihat `AppState::new`
 /// untuk itu).
 impl
     AppState<
@@ -82,6 +95,7 @@ impl
         InMemoryTransactionRepository,
         InMemoryRelationshipRepository,
         InMemoryInteractionRepository,
+        InMemoryServiceOrderRepository,
     >
 {
     pub fn new_in_memory() -> Self {
@@ -92,6 +106,7 @@ impl
             InMemoryTransactionRepository::new(),
             InMemoryRelationshipRepository::new(),
             InMemoryInteractionRepository::new(),
+            InMemoryServiceOrderRepository::new(),
         )
     }
 }
