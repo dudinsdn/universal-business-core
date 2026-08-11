@@ -1,4 +1,5 @@
 use api::{AppState, build_router};
+use capability_workshop::{WorkshopState, build_workshop_router};
 use infra_postgres::{
     PgBusinessRepository, PgCustomerRepository, PgInteractionRepository, PgRelationshipRepository,
     PgServiceOrderRepository, PgTenantRepository, PgTransactionRepository, run_migrations,
@@ -28,16 +29,35 @@ async fn main() {
     let interaction_repository = PgInteractionRepository::new(pool.clone());
     let service_order_repository = PgServiceOrderRepository::new(pool);
 
-    let state = AppState::new(
+    // Core: AppState HANYA generik atas Repository Core — tidak lagi
+    // mengenal ServiceOrder/Workshop sama sekali.
+    let core_state = AppState::new(
         tenant_repository,
         business_repository,
         customer_repository,
         transaction_repository,
         relationship_repository,
         interaction_repository,
-        service_order_repository,
     );
-    let app = build_router(state);
+
+    // Ambil salinan `business_service` SEBELUM `core_state` dipindah
+    // (consumed) ke `build_router` — Workshop butuh `BusinessService` yang
+    // sama (instance Repository yang sama) untuk `get_business`, bukan
+    // koneksi terpisah. `BusinessService` derive `Clone` murah (cuma
+    // menyalin Arc/handle di dalam Repository-nya, bukan data).
+    let business_service_for_workshop = core_state.business_service.clone();
+
+    let core_router = build_router(core_state);
+
+    // Workshop: router HTTP mandiri, generik HANYA atas dependency yang
+    // dia butuhkan (BusinessRepository lewat BusinessService + repository
+    // ServiceOrder miliknya sendiri) — bukan lagi lewat parameter generik
+    // gabungan di `AppState`.
+    let workshop_state =
+        WorkshopState::new(business_service_for_workshop, service_order_repository);
+    let workshop_router = build_workshop_router(workshop_state);
+
+    let app = core_router.merge(workshop_router);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await

@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use capability_workshop::ServiceOrder;
 use domain::{Business, Customer, Interaction, Relationship, Tenant, Transaction};
 
 #[derive(Debug, Deserialize)]
@@ -276,64 +275,6 @@ impl From<&Interaction> for InteractionResponse {
                 .to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
             version: interaction.version(),
             is_deleted: interaction.is_deleted(),
-        }
-    }
-}
-
-/// Body untuk `POST /businesses/{business_id}/service-orders`. Pola sama
-/// seperti `CreateInteractionRequest` — `id` opsional untuk idempotent
-/// create, `customer_id` wajib (sesuai keputusan Din: ServiceOrder selalu
-/// untuk satu Customer tertentu).
-#[derive(Debug, Deserialize)]
-pub struct CreateServiceOrderRequest {
-    #[serde(default)]
-    pub id: Option<String>,
-    pub customer_id: String,
-    pub description: String,
-}
-
-/// Body untuk aksi status yang hanya butuh optimistic locking —
-/// `PATCH /service-orders/{id}/start` dan `.../cancel`. Dipisah dari
-/// `DeleteRequest` walau bentuknya identik, supaya niatnya jelas dari
-/// nama tipe di signature handler (bukan berarti operasi hapus).
-#[derive(Debug, Deserialize)]
-pub struct ServiceOrderActionRequest {
-    pub expected_version: u32,
-}
-
-/// Body untuk `PATCH /service-orders/{id}/complete`. `transaction_id`
-/// opsional — link ke Transaction (Core) yang menagihnya, sesuai
-/// keputusan Din.
-#[derive(Debug, Deserialize)]
-pub struct CompleteServiceOrderRequest {
-    pub expected_version: u32,
-    #[serde(default)]
-    pub transaction_id: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ServiceOrderResponse {
-    pub id: String,
-    pub business_id: String,
-    pub customer_id: String,
-    pub description: String,
-    pub status: String,
-    pub transaction_id: Option<String>,
-    pub version: u32,
-    pub is_deleted: bool,
-}
-
-impl From<&ServiceOrder> for ServiceOrderResponse {
-    fn from(order: &ServiceOrder) -> Self {
-        Self {
-            id: order.id().to_string(),
-            business_id: order.business_id().to_string(),
-            customer_id: order.customer_id().to_string(),
-            description: order.description().as_str().to_string(),
-            status: order.status().as_str().to_string(),
-            transaction_id: order.transaction_id().map(|t| t.to_string()),
-            version: order.version(),
-            is_deleted: order.is_deleted(),
         }
     }
 }

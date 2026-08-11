@@ -8,8 +8,6 @@ pub mod state;
 pub mod sync_routes;
 pub mod tenant_routes;
 pub mod transaction_routes;
-pub mod workshop_error;
-pub mod workshop_routes;
 
 use std::sync::Arc;
 
@@ -20,23 +18,23 @@ use application::{
     BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
     TenantRepository, TransactionRepository,
 };
-use capability_workshop::ServiceOrderRepository;
 
 pub use state::AppState;
 
-/// Menyusun seluruh route jadi satu `Router`. Dipisah dari `main.rs` supaya
-/// bisa dipakai ulang oleh test integrasi tanpa perlu menjalankan server
-/// TCP sungguhan.
+/// Menyusun seluruh route Core jadi satu `Router`. Dipisah dari
+/// `main.rs` supaya bisa dipakai ulang oleh test integrasi tanpa perlu
+/// menjalankan server TCP sungguhan.
 ///
-/// Generik atas `TR`/`BR`/`CR`/`TxR`/`RR`/`IR`/`SR`: dipanggil dengan
-/// `PgTenantRepository`/`PgBusinessRepository`/dst dari `main.rs`
-/// (production), atau dengan repository in-memory dari test — tidak ada
-/// percabangan kode di sini sama sekali, cuma tipe konkret yang beda di
-/// titik pemanggilan. `SR` (`ServiceOrderRepository`, Capability Workshop)
-/// ikut generik dengan pola yang sama walau bukan bagian dari Core.
-pub fn build_router<TR, BR, CR, TxR, RR, IR, SR>(
-    state: AppState<TR, BR, CR, TxR, RR, IR, SR>,
-) -> Router
+/// SENGAJA HANYA generik atas Repository Core (`TR`/`BR`/`CR`/`TxR`/`RR`
+/// /`IR`) — crate ini TIDAK LAGI mengenal Capability apa pun (tidak ada
+/// import `capability_workshop` di sini sama sekali). Route Capability
+/// dirakit terpisah oleh crate Capability masing-masing (lihat
+/// `capability_workshop::build_workshop_router`) dan digabung ke hasil
+/// `build_router` ini lewat `Router::merge` di titik komposisi
+/// (`main.rs`/test) — bukan lewat parameter generik gabungan di sini.
+/// Konsekuensinya: jumlah generik di fungsi ini TIDAK bertambah setiap
+/// kali Capability baru ditambahkan (Laundry, Klinik, dst).
+pub fn build_router<TR, BR, CR, TxR, RR, IR>(state: AppState<TR, BR, CR, TxR, RR, IR>) -> Router
 where
     TR: TenantRepository + Clone + 'static,
     BR: BusinessRepository + Clone + 'static,
@@ -44,99 +42,74 @@ where
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
-    SR: ServiceOrderRepository + Clone + 'static,
 {
     Router::new()
         .route(
             "/tenants",
-            post(tenant_routes::create_tenant::<TR, BR, CR, TxR, RR, IR, SR>)
-                .get(sync_routes::list_tenants_updated_since::<TR, BR, CR, TxR, RR, IR, SR>),
+            post(tenant_routes::create_tenant::<TR, BR, CR, TxR, RR, IR>)
+                .get(sync_routes::list_tenants_updated_since::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/tenants/{id}",
-            get(tenant_routes::get_tenant::<TR, BR, CR, TxR, RR, IR, SR>)
-                .patch(tenant_routes::rename_tenant::<TR, BR, CR, TxR, RR, IR, SR>)
-                .delete(tenant_routes::delete_tenant::<TR, BR, CR, TxR, RR, IR, SR>),
+            get(tenant_routes::get_tenant::<TR, BR, CR, TxR, RR, IR>)
+                .patch(tenant_routes::rename_tenant::<TR, BR, CR, TxR, RR, IR>)
+                .delete(tenant_routes::delete_tenant::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/tenants/{tenant_id}/businesses",
-            post(business_routes::create_business::<TR, BR, CR, TxR, RR, IR, SR>)
-                .get(sync_routes::list_businesses_updated_since::<TR, BR, CR, TxR, RR, IR, SR>),
+            post(business_routes::create_business::<TR, BR, CR, TxR, RR, IR>)
+                .get(sync_routes::list_businesses_updated_since::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/businesses/{id}",
-            patch(business_routes::rename_business::<TR, BR, CR, TxR, RR, IR, SR>)
-                .delete(business_routes::delete_business::<TR, BR, CR, TxR, RR, IR, SR>),
+            patch(business_routes::rename_business::<TR, BR, CR, TxR, RR, IR>)
+                .delete(business_routes::delete_business::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/businesses/{business_id}/customers",
-            post(customer_routes::create_customer::<TR, BR, CR, TxR, RR, IR, SR>)
-                .get(sync_routes::list_customers_updated_since::<TR, BR, CR, TxR, RR, IR, SR>),
+            post(customer_routes::create_customer::<TR, BR, CR, TxR, RR, IR>)
+                .get(sync_routes::list_customers_updated_since::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/customers/{id}",
-            patch(customer_routes::rename_customer::<TR, BR, CR, TxR, RR, IR, SR>)
-                .delete(customer_routes::delete_customer::<TR, BR, CR, TxR, RR, IR, SR>),
+            patch(customer_routes::rename_customer::<TR, BR, CR, TxR, RR, IR>)
+                .delete(customer_routes::delete_customer::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/customers/{id}/phone",
-            patch(customer_routes::update_customer_phone::<TR, BR, CR, TxR, RR, IR, SR>),
+            patch(customer_routes::update_customer_phone::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/businesses/{business_id}/transactions",
-            post(transaction_routes::create_transaction::<TR, BR, CR, TxR, RR, IR, SR>)
-                .get(sync_routes::list_transactions_updated_since::<TR, BR, CR, TxR, RR, IR, SR>),
+            post(transaction_routes::create_transaction::<TR, BR, CR, TxR, RR, IR>)
+                .get(sync_routes::list_transactions_updated_since::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/transactions/{id}",
             axum::routing::delete(
-                transaction_routes::delete_transaction::<TR, BR, CR, TxR, RR, IR, SR>,
+                transaction_routes::delete_transaction::<TR, BR, CR, TxR, RR, IR>,
             ),
         )
         .route(
             "/businesses/{business_id}/relationships",
-            post(relationship_routes::create_relationship::<TR, BR, CR, TxR, RR, IR, SR>)
-                .get(sync_routes::list_relationships_updated_since::<TR, BR, CR, TxR, RR, IR, SR>),
+            post(relationship_routes::create_relationship::<TR, BR, CR, TxR, RR, IR>)
+                .get(sync_routes::list_relationships_updated_since::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/relationships/{id}",
             axum::routing::delete(
-                relationship_routes::delete_relationship::<TR, BR, CR, TxR, RR, IR, SR>,
+                relationship_routes::delete_relationship::<TR, BR, CR, TxR, RR, IR>,
             ),
         )
         .route(
             "/businesses/{business_id}/interactions",
-            post(interaction_routes::create_interaction::<TR, BR, CR, TxR, RR, IR, SR>)
-                .get(sync_routes::list_interactions_updated_since::<TR, BR, CR, TxR, RR, IR, SR>),
+            post(interaction_routes::create_interaction::<TR, BR, CR, TxR, RR, IR>)
+                .get(sync_routes::list_interactions_updated_since::<TR, BR, CR, TxR, RR, IR>),
         )
         .route(
             "/interactions/{id}",
             axum::routing::delete(
-                interaction_routes::delete_interaction::<TR, BR, CR, TxR, RR, IR, SR>,
-            ),
-        )
-        .route(
-            "/businesses/{business_id}/service-orders",
-            post(workshop_routes::create_service_order::<TR, BR, CR, TxR, RR, IR, SR>).get(
-                workshop_routes::list_service_orders_updated_since::<TR, BR, CR, TxR, RR, IR, SR>,
-            ),
-        )
-        .route(
-            "/service-orders/{id}/start",
-            patch(workshop_routes::start_service_order::<TR, BR, CR, TxR, RR, IR, SR>),
-        )
-        .route(
-            "/service-orders/{id}/complete",
-            patch(workshop_routes::complete_service_order::<TR, BR, CR, TxR, RR, IR, SR>),
-        )
-        .route(
-            "/service-orders/{id}/cancel",
-            patch(workshop_routes::cancel_service_order::<TR, BR, CR, TxR, RR, IR, SR>),
-        )
-        .route(
-            "/service-orders/{id}",
-            axum::routing::delete(
-                workshop_routes::delete_service_order::<TR, BR, CR, TxR, RR, IR, SR>,
+                interaction_routes::delete_interaction::<TR, BR, CR, TxR, RR, IR>,
             ),
         )
         .with_state(Arc::new(state))

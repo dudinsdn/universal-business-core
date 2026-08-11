@@ -6,15 +6,14 @@ use application::{
     BusinessRepository, CustomerRepository, InteractionRepository, RelationshipRepository,
     TenantRepository, TransactionRepository,
 };
-use capability_workshop::ServiceOrderRepository;
 use domain::{BusinessId, CustomerId, RelationshipId, RelationshipType};
 
 use crate::dto::{CreateRelationshipRequest, DeleteRequest, RelationshipResponse};
 use crate::error::ApiError;
 use crate::state::SharedState;
 
-pub async fn create_relationship<TR, BR, CR, TxR, RR, IR, SR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR, SR>>,
+pub async fn create_relationship<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(business_id): Path<String>,
     Json(payload): Json<CreateRelationshipRequest>,
 ) -> Result<(StatusCode, Json<RelationshipResponse>), ApiError>
@@ -25,7 +24,6 @@ where
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
-    SR: ServiceOrderRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id
         .parse()
@@ -67,8 +65,8 @@ where
     Ok((status, Json(RelationshipResponse::from(&relationship))))
 }
 
-pub async fn delete_relationship<TR, BR, CR, TxR, RR, IR, SR>(
-    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR, SR>>,
+pub async fn delete_relationship<TR, BR, CR, TxR, RR, IR>(
+    State(state): State<SharedState<TR, BR, CR, TxR, RR, IR>>,
     Path(id): Path<String>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<StatusCode, ApiError>
@@ -79,7 +77,6 @@ where
     TxR: TransactionRepository + Clone + 'static,
     RR: RelationshipRepository + Clone + 'static,
     IR: InteractionRepository + Clone + 'static,
-    SR: ServiceOrderRepository + Clone + 'static,
 {
     let id: RelationshipId = id.parse().map_err(application::ApplicationError::from)?;
     state

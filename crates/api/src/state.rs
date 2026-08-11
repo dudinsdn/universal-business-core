@@ -7,23 +7,23 @@ use application::{
     InteractionRepository, InteractionService, RelationshipRepository, RelationshipService,
     TenantRepository, TenantService, TransactionRepository, TransactionService,
 };
-use capability_workshop::{
-    InMemoryServiceOrderRepository, ServiceOrderRepository, ServiceOrderService,
-};
 
-/// State yang dibagi ke semua handler.
+/// State yang dibagi ke semua handler Core.
 ///
-/// Generik atas tipe Repository (`TR`, `BR`, `CR`, `TxR`, `RR`, `IR`, `SR`)
-/// — bukan cuma "boleh generik secara teori", ini alasan trait Repository
-/// dibuat sejak awal: production (`main.rs`) memasangnya dengan
-/// `PgTenantRepository`/`PgBusinessRepository`/dst, test
-/// (`tests/tenant_flow.rs`) memasangnya dengan repository in-memory —
-/// tanpa satu baris pun kode handler yang beda antara keduanya.
+/// Generik atas tipe Repository (`TR`, `BR`, `CR`, `TxR`, `RR`, `IR`) —
+/// production (`main.rs`) memasangnya dengan
+/// `PgTenantRepository`/`PgBusinessRepository`/dst, test memasangnya
+/// dengan repository in-memory — tanpa satu baris pun kode handler yang
+/// beda antara keduanya.
 ///
-/// `SR` (`ServiceOrderRepository`) adalah repository Capability Workshop
-/// — dari luar Core, tapi tetap dipasang lewat pola generik yang sama
-/// supaya `api` tidak perlu tahu implementasi konkretnya (Postgres belum
-/// ada untuk ServiceOrder di tahap ini, lihat `main.rs`).
+/// SENGAJA TIDAK generik atas Capability apa pun (mis. tidak ada lagi
+/// `SR`/`ServiceOrderRepository` di sini). Setiap Capability (Workshop,
+/// nanti Laundry/Klinik) punya state & router HTTP-nya sendiri (lihat
+/// `capability_workshop::WorkshopState`/`build_workshop_router`),
+/// digabung ke Router Core lewat `.merge()` di titik komposisi
+/// (`main.rs`/test) — bukan lewat parameter generik gabungan di sini.
+/// Ini yang membuat jumlah generik di `AppState` TIDAK bertambah setiap
+/// kali Capability baru ditambahkan.
 pub struct AppState<
     TR: TenantRepository,
     BR: BusinessRepository,
@@ -31,7 +31,6 @@ pub struct AppState<
     TxR: TransactionRepository,
     RR: RelationshipRepository,
     IR: InteractionRepository,
-    SR: ServiceOrderRepository,
 > {
     pub tenant_service: TenantService<TR>,
     pub business_service: BusinessService<BR>,
@@ -39,7 +38,6 @@ pub struct AppState<
     pub transaction_service: TransactionService<TxR>,
     pub relationship_service: RelationshipService<RR>,
     pub interaction_service: InteractionService<IR>,
-    pub service_order_service: ServiceOrderService<SR>,
     /// Dipakai langsung (bukan lewat service) khusus untuk
     /// `delete_tenant`, yang butuh `BusinessRepository` sebagai parameter
     /// eksplisit karena itu operasi lintas-aggregate.
@@ -49,7 +47,7 @@ pub struct AppState<
 /// Alias untuk `Arc<AppState<...>>` — dipakai di parameter `State<...>`
 /// setiap handler supaya signature-nya tidak "very complex type" menurut
 /// clippy. Murni penyederhanaan tulisan, bukan perubahan tipe.
-pub type SharedState<TR, BR, CR, TxR, RR, IR, SR> = Arc<AppState<TR, BR, CR, TxR, RR, IR, SR>>;
+pub type SharedState<TR, BR, CR, TxR, RR, IR> = Arc<AppState<TR, BR, CR, TxR, RR, IR>>;
 
 impl<
     TR: TenantRepository,
@@ -58,8 +56,7 @@ impl<
     TxR: TransactionRepository,
     RR: RelationshipRepository,
     IR: InteractionRepository,
-    SR: ServiceOrderRepository,
-> AppState<TR, BR, CR, TxR, RR, IR, SR>
+> AppState<TR, BR, CR, TxR, RR, IR>
 {
     pub fn new(
         tenant_repository: TR,
@@ -68,7 +65,6 @@ impl<
         transaction_repository: TxR,
         relationship_repository: RR,
         interaction_repository: IR,
-        service_order_repository: SR,
     ) -> Self {
         Self {
             tenant_service: TenantService::new(tenant_repository),
@@ -77,16 +73,13 @@ impl<
             transaction_service: TransactionService::new(transaction_repository),
             relationship_service: RelationshipService::new(relationship_repository),
             interaction_service: InteractionService::new(interaction_repository),
-            service_order_service: ServiceOrderService::new(service_order_repository),
             business_repository,
         }
     }
 }
 
 /// Konstruktor khusus untuk test — repository in-memory, tidak butuh
-/// Postgres sama sekali. Cuma tersedia untuk kombinasi tipe in-memory,
-/// bukan untuk TR/BR/CR/TxR/RR/IR/SR generik apa pun (lihat `AppState::new`
-/// untuk itu).
+/// Postgres sama sekali.
 impl
     AppState<
         InMemoryTenantRepository,
@@ -95,7 +88,6 @@ impl
         InMemoryTransactionRepository,
         InMemoryRelationshipRepository,
         InMemoryInteractionRepository,
-        InMemoryServiceOrderRepository,
     >
 {
     pub fn new_in_memory() -> Self {
@@ -106,7 +98,6 @@ impl
             InMemoryTransactionRepository::new(),
             InMemoryRelationshipRepository::new(),
             InMemoryInteractionRepository::new(),
-            InMemoryServiceOrderRepository::new(),
         )
     }
 }

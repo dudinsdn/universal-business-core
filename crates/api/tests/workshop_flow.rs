@@ -6,9 +6,25 @@ use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use api::{AppState, build_router};
+use capability_workshop::{InMemoryServiceOrderRepository, WorkshopState, build_workshop_router};
 
+/// Menggabungkan Core router + Workshop router — pola sama seperti
+/// `main.rs`. `business_service` disalin dari `core_state` SEBELUM
+/// `build_router` memindahnya, supaya Workshop memakai instance
+/// `BusinessRepository` YANG SAMA dengan Core (bukan repository
+/// in-memory terpisah yang datanya beda).
 fn app() -> Router {
-    build_router(AppState::new_in_memory())
+    let core_state = AppState::new_in_memory();
+    let business_service_for_workshop = core_state.business_service.clone();
+    let core_router = build_router(core_state);
+
+    let workshop_state = WorkshopState::new(
+        business_service_for_workshop,
+        InMemoryServiceOrderRepository::new(),
+    );
+    let workshop_router = build_workshop_router(workshop_state);
+
+    core_router.merge(workshop_router)
 }
 
 async fn send(app: &Router, req: Request<Body>) -> (StatusCode, Value) {
