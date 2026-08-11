@@ -43,7 +43,20 @@ async fn main() {
         .await
         .expect("gagal bind ke port 3000");
 
-    println!("API berjalan di http://0.0.0.0:3000 (repository: Postgres)");
+    println!("🚀 Server Axum berjalan di:");
+    println!("   -> Local:   http://localhost:3000");
+
+    // Otomatis deteksi semua IP lokal aktif (Wi-Fi, USB Tethering, Ethernet)
+    if let Ok(interfaces) = get_if_addrs::get_if_addrs() {
+        for iface in interfaces {
+            // Filter hanya IPv4 dan abaikan loopback (127.0.0.1)
+            if !iface.is_loopback() {
+                if let std::net::IpAddr::V4(ip) = iface.ip() {
+                    println!("   -> Network ({}) : http://{}:3000", iface.name, ip);
+                }
+            }
+        }
+    }
 
     axum::serve(listener, app)
         .await
