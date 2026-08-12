@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use domain::{
-    Business, BusinessId, CustomerId, Relationship, RelationshipId, RelationshipType, rules,
+    Business, BusinessId, Customer, Relationship, RelationshipId, RelationshipType, rules,
 };
 
 use crate::error::ApplicationError;
@@ -17,16 +17,16 @@ use crate::repository::RelationshipRepository;
 /// di `domain::relationship`): hanya `create` dan `delete` (soft delete)
 /// yang tersedia.
 ///
-/// DUA validasi berikut SENGAJA belum diimplementasikan — belum ada
-/// keputusan eksplisit soal itu, konsisten dengan pola yang sama di
-/// `TransactionService`:
-/// 1. Bahwa `from_customer_id` dan `to_customer_id` benar-benar Customer
-///    yang ada dan milik Business yang sama (butuh `CustomerRepository`
-///    sebagai dependency tambahan).
-/// 2. Pencegahan relationship duplikat — pasangan Customer + jenis yang
-///    sama tercatat lebih dari sekali.
+/// `from_customer`/`to_customer` diterima sebagai `&Customer` (BUKAN
+/// `CustomerId` mentah) — pemanggil (route) WAJIB mengambil keduanya
+/// lebih dulu lewat `CustomerService::get_customer`, supaya validasi
+/// `rules::customer_belongs_to_business` bisa dilakukan di sini untuk
+/// KEDUA sisi relasi sebelum Relationship dibuat.
 ///
-/// Keduanya bisa ditambahkan nanti kalau memang dibutuhkan.
+/// SATU validasi lain masih SENGAJA belum diimplementasikan, konsisten
+/// dengan pola yang sama di seluruh Core: pencegahan relationship
+/// duplikat — pasangan Customer + jenis yang sama tercatat lebih dari
+/// sekali. Bisa ditambahkan nanti kalau memang dibutuhkan.
 #[derive(Clone)]
 pub struct RelationshipService<R: RelationshipRepository> {
     repository: R,
@@ -48,8 +48,8 @@ impl<R: RelationshipRepository> RelationshipService<R> {
         &self,
         business: &Business,
         id: RelationshipId,
-        from_customer_id: CustomerId,
-        to_customer_id: CustomerId,
+        from_customer: &Customer,
+        to_customer: &Customer,
         relationship_type: RelationshipType,
     ) -> Result<(Relationship, bool), ApplicationError> {
         if let Some(existing) = self.repository.find_by_id(id).await? {
@@ -58,11 +58,21 @@ impl<R: RelationshipRepository> RelationshipService<R> {
 
         rules::ensure_business_is_active(business.is_deleted())?;
 
+        // Info-hiding sengaja: lihat komentar di
+        // `TransactionService::create_transaction` — kedua sisi relasi
+        // divalidasi, apa pun yang gagal duluan dipetakan ke
+        // `CustomerNotFound` yang sama.
+        if !rules::customer_belongs_to_business(from_customer.business_id(), business.id())
+            || !rules::customer_belongs_to_business(to_customer.business_id(), business.id())
+        {
+            return Err(ApplicationError::CustomerNotFound);
+        }
+
         let relationship = Relationship::with_id(
             id,
             business.id(),
-            from_customer_id,
-            to_customer_id,
+            from_customer.id(),
+            to_customer.id(),
             relationship_type,
         )?;
         self.repository.save(&relationship).await?;
@@ -106,7 +116,7 @@ impl<R: RelationshipRepository> RelationshipService<R> {
 mod tests {
     use super::*;
     use crate::in_memory::InMemoryRelationshipRepository;
-    use domain::{BusinessName, BusinessType, DomainError, Tenant, TenantName};
+    use domain::{BusinessName, BusinessType, CustomerName, DomainError, Tenant, TenantName};
 
     fn active_business() -> Business {
         let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
@@ -121,18 +131,18 @@ mod tests {
         RelationshipType::new("referral").unwrap()
     }
 
+    fn sample_customer(business: &Business, name: &str) -> Customer {
+        Customer::new(business.id(), CustomerName::new(name).unwrap(), None)
+    }
+
     async fn create_test_relationship(
         service: &RelationshipService<InMemoryRelationshipRepository>,
         business: &Business,
+        from: &Customer,
+        to: &Customer,
     ) -> Relationship {
         service
-            .create_relationship(
-                business,
-                RelationshipId::new(),
-                CustomerId::new(),
-                CustomerId::new(),
-                sample_type(),
-            )
+            .create_relationship(business, RelationshipId::new(), from, to, sample_type())
             .await
             .unwrap()
             .0
@@ -143,8 +153,10 @@ mod tests {
         let repo = InMemoryRelationshipRepository::new();
         let service = RelationshipService::new(repo);
         let business = active_business();
+        let from = sample_customer(&business, "Budi");
+        let to = sample_customer(&business, "Ani");
 
-        let relationship = create_test_relationship(&service, &business).await;
+        let relationship = create_test_relationship(&service, &business, &from, &to).await;
 
         assert_eq!(relationship.business_id(), business.id());
     }
@@ -154,16 +166,12 @@ mod tests {
         let repo = InMemoryRelationshipRepository::new();
         let service = RelationshipService::new(repo);
         let mut business = active_business();
+        let from = sample_customer(&business, "Budi");
+        let to = sample_customer(&business, "Ani");
         business.soft_delete();
 
         let result = service
-            .create_relationship(
-                &business,
-                RelationshipId::new(),
-                CustomerId::new(),
-                CustomerId::new(),
-                sample_type(),
-            )
+            .create_relationship(&business, RelationshipId::new(), &from, &to, sample_type())
             .await;
 
         assert!(matches!(
@@ -177,14 +185,14 @@ mod tests {
         let repo = InMemoryRelationshipRepository::new();
         let service = RelationshipService::new(repo);
         let business = active_business();
-        let customer_id = CustomerId::new();
+        let customer = sample_customer(&business, "Budi");
 
         let result = service
             .create_relationship(
                 &business,
                 RelationshipId::new(),
-                customer_id,
-                customer_id,
+                &customer,
+                &customer,
                 sample_type(),
             )
             .await;
@@ -196,16 +204,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_relationship_rejects_customer_from_another_business() {
+        let repo = InMemoryRelationshipRepository::new();
+        let service = RelationshipService::new(repo);
+        let business = active_business();
+        let other_business = active_business();
+        let from = sample_customer(&business, "Budi");
+        // to milik Business LAIN — mensimulasikan client mengirim
+        // customer_id yang bukan miliknya.
+        let foreign_to = sample_customer(&other_business, "Ani");
+
+        let result = service
+            .create_relationship(
+                &business,
+                RelationshipId::new(),
+                &from,
+                &foreign_to,
+                sample_type(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(ApplicationError::CustomerNotFound)));
+    }
+
+    #[tokio::test]
     async fn create_relationship_with_same_id_is_idempotent() {
         let repo = InMemoryRelationshipRepository::new();
         let service = RelationshipService::new(repo);
         let business = active_business();
+        let from = sample_customer(&business, "Budi");
+        let to = sample_customer(&business, "Ani");
         let id = RelationshipId::new();
-        let from = CustomerId::new();
-        let to = CustomerId::new();
 
         let (first, first_created) = service
-            .create_relationship(&business, id, from, to, sample_type())
+            .create_relationship(&business, id, &from, &to, sample_type())
             .await
             .unwrap();
         assert!(first_created);
@@ -216,8 +248,8 @@ mod tests {
             .create_relationship(
                 &business,
                 id,
-                from,
-                to,
+                &from,
+                &to,
                 RelationshipType::new("sibling").unwrap(),
             )
             .await
@@ -234,9 +266,13 @@ mod tests {
         let service = RelationshipService::new(repo);
         let business_a = active_business();
         let business_b = active_business();
+        let from_a = sample_customer(&business_a, "Budi");
+        let to_a = sample_customer(&business_a, "Ani");
+        let from_b = sample_customer(&business_b, "Siti");
+        let to_b = sample_customer(&business_b, "Joko");
 
-        create_test_relationship(&service, &business_a).await;
-        create_test_relationship(&service, &business_b).await;
+        create_test_relationship(&service, &business_a, &from_a, &to_a).await;
+        create_test_relationship(&service, &business_b, &from_b, &to_b).await;
 
         let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
         let changed = service
@@ -253,7 +289,9 @@ mod tests {
         let repo = InMemoryRelationshipRepository::new();
         let service = RelationshipService::new(repo);
         let business = active_business();
-        let relationship = create_test_relationship(&service, &business).await;
+        let from = sample_customer(&business, "Budi");
+        let to = sample_customer(&business, "Ani");
+        let relationship = create_test_relationship(&service, &business, &from, &to).await;
 
         let result = service
             .delete_relationship(relationship.id(), relationship.version() + 1)
@@ -270,7 +308,9 @@ mod tests {
         let repo = InMemoryRelationshipRepository::new();
         let service = RelationshipService::new(repo);
         let business = active_business();
-        let relationship = create_test_relationship(&service, &business).await;
+        let from = sample_customer(&business, "Budi");
+        let to = sample_customer(&business, "Ani");
+        let relationship = create_test_relationship(&service, &business, &from, &to).await;
 
         service
             .delete_relationship(relationship.id(), relationship.version())

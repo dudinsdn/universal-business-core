@@ -40,21 +40,26 @@ async fn main() {
         interaction_repository,
     );
 
-    // Ambil salinan `business_service` SEBELUM `core_state` dipindah
-    // (consumed) ke `build_router` — Workshop butuh `BusinessService` yang
-    // sama (instance Repository yang sama) untuk `get_business`, bukan
-    // koneksi terpisah. `BusinessService` derive `Clone` murah (cuma
+    // Ambil salinan `business_service`/`customer_service` SEBELUM
+    // `core_state` dipindah (consumed) ke `build_router` — Workshop
+    // butuh keduanya (instance Repository yang SAMA dengan Core) untuk
+    // `get_business`/`get_customer`, bukan koneksi terpisah.
+    // `BusinessService`/`CustomerService` derive `Clone` murah (cuma
     // menyalin Arc/handle di dalam Repository-nya, bukan data).
     let business_service_for_workshop = core_state.business_service.clone();
+    let customer_service_for_workshop = core_state.customer_service.clone();
 
     let core_router = build_router(core_state);
 
     // Workshop: router HTTP mandiri, generik HANYA atas dependency yang
-    // dia butuhkan (BusinessRepository lewat BusinessService + repository
-    // ServiceOrder miliknya sendiri) — bukan lagi lewat parameter generik
-    // gabungan di `AppState`.
-    let workshop_state =
-        WorkshopState::new(business_service_for_workshop, service_order_repository);
+    // dia butuhkan (BusinessRepository + CustomerRepository lewat
+    // BusinessService/CustomerService + repository ServiceOrder miliknya
+    // sendiri) — bukan lagi lewat parameter generik gabungan di `AppState`.
+    let workshop_state = WorkshopState::new(
+        business_service_for_workshop,
+        customer_service_for_workshop,
+        service_order_repository,
+    );
     let workshop_router = build_workshop_router(workshop_state);
 
     let app = core_router.merge(workshop_router);

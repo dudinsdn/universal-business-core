@@ -43,6 +43,14 @@ pub enum WorkshopError {
     UnknownStatus {
         value: String,
     },
+    /// ServiceOrder tidak boleh dibuat untuk Customer yang bukan milik
+    /// Business yang sama (gap #3: validasi customer_id lintas-aggregate).
+    /// SENGAJA dipetakan ke pesan/status yang SAMA seperti "tidak
+    /// ditemukan" (404, bukan 409) — analog
+    /// `ApplicationError::CustomerNotFound` di Core — supaya client tidak
+    /// bisa membedakan "customer_id salah" dari "customer_id itu milik
+    /// business/tenant lain" (info-hiding, lihat diskusi desain gap #3).
+    CustomerNotFound,
 }
 
 impl fmt::Display for WorkshopError {
@@ -67,6 +75,7 @@ impl fmt::Display for WorkshopError {
             WorkshopError::UnknownStatus { value } => {
                 write!(f, "status service order tidak dikenal: {value}")
             }
+            WorkshopError::CustomerNotFound => write!(f, "customer tidak ditemukan"),
         }
     }
 }

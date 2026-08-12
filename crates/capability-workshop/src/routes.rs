@@ -16,7 +16,7 @@ use axum::http::StatusCode;
 use axum::routing::{patch, post};
 use chrono::{DateTime, Utc};
 
-use application::BusinessRepository;
+use application::{BusinessRepository, CustomerRepository};
 use domain::{BusinessId, CustomerId, DomainError, TransactionId};
 
 use crate::dto::{
@@ -41,13 +41,14 @@ fn parse_updated_since(raw: Option<String>) -> Result<DateTime<Utc>, DomainError
     }
 }
 
-pub async fn create_service_order<BR, SR>(
-    State(state): State<SharedWorkshopState<BR, SR>>,
+pub async fn create_service_order<BR, CR, SR>(
+    State(state): State<SharedWorkshopState<BR, CR, SR>>,
     Path(business_id): Path<String>,
     Json(payload): Json<CreateServiceOrderRequest>,
 ) -> Result<(StatusCode, Json<ServiceOrderResponse>), WorkshopApiError>
 where
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
     SR: ServiceOrderRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id.parse()?;
@@ -58,11 +59,15 @@ where
         None => ServiceOrderId::new(),
     };
     let customer_id: CustomerId = payload.customer_id.parse()?;
+    // Ambil Customer utuh — dibutuhkan ServiceOrderService untuk
+    // memvalidasi Customer ini benar-benar milik Business yang sama
+    // (lihat domain::rules::customer_belongs_to_business, gap #3).
+    let customer = state.customer_service.get_customer(customer_id).await?;
     let description = ServiceOrderDescription::new(payload.description)?;
 
     let (order, created) = state
         .service_order_service
-        .create_service_order(&business, id, customer_id, description)
+        .create_service_order(&business, id, &customer, description)
         .await?;
     let status = if created {
         StatusCode::CREATED
@@ -72,13 +77,14 @@ where
     Ok((status, Json(ServiceOrderResponse::from(&order))))
 }
 
-pub async fn list_service_orders_updated_since<BR, SR>(
-    State(state): State<SharedWorkshopState<BR, SR>>,
+pub async fn list_service_orders_updated_since<BR, CR, SR>(
+    State(state): State<SharedWorkshopState<BR, CR, SR>>,
     Path(business_id): Path<String>,
     Query(query): Query<SyncQuery>,
 ) -> Result<Json<Vec<ServiceOrderResponse>>, WorkshopApiError>
 where
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
     SR: ServiceOrderRepository + Clone + 'static,
 {
     let business_id: BusinessId = business_id.parse()?;
@@ -94,13 +100,14 @@ where
     ))
 }
 
-pub async fn start_service_order<BR, SR>(
-    State(state): State<SharedWorkshopState<BR, SR>>,
+pub async fn start_service_order<BR, CR, SR>(
+    State(state): State<SharedWorkshopState<BR, CR, SR>>,
     Path(id): Path<String>,
     Json(payload): Json<ServiceOrderActionRequest>,
 ) -> Result<Json<ServiceOrderResponse>, WorkshopApiError>
 where
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
     SR: ServiceOrderRepository + Clone + 'static,
 {
     let id: ServiceOrderId = id.parse()?;
@@ -111,13 +118,14 @@ where
     Ok(Json(ServiceOrderResponse::from(&order)))
 }
 
-pub async fn complete_service_order<BR, SR>(
-    State(state): State<SharedWorkshopState<BR, SR>>,
+pub async fn complete_service_order<BR, CR, SR>(
+    State(state): State<SharedWorkshopState<BR, CR, SR>>,
     Path(id): Path<String>,
     Json(payload): Json<CompleteServiceOrderRequest>,
 ) -> Result<Json<ServiceOrderResponse>, WorkshopApiError>
 where
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
     SR: ServiceOrderRepository + Clone + 'static,
 {
     let id: ServiceOrderId = id.parse()?;
@@ -130,13 +138,14 @@ where
     Ok(Json(ServiceOrderResponse::from(&order)))
 }
 
-pub async fn cancel_service_order<BR, SR>(
-    State(state): State<SharedWorkshopState<BR, SR>>,
+pub async fn cancel_service_order<BR, CR, SR>(
+    State(state): State<SharedWorkshopState<BR, CR, SR>>,
     Path(id): Path<String>,
     Json(payload): Json<ServiceOrderActionRequest>,
 ) -> Result<Json<ServiceOrderResponse>, WorkshopApiError>
 where
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
     SR: ServiceOrderRepository + Clone + 'static,
 {
     let id: ServiceOrderId = id.parse()?;
@@ -147,13 +156,14 @@ where
     Ok(Json(ServiceOrderResponse::from(&order)))
 }
 
-pub async fn delete_service_order<BR, SR>(
-    State(state): State<SharedWorkshopState<BR, SR>>,
+pub async fn delete_service_order<BR, CR, SR>(
+    State(state): State<SharedWorkshopState<BR, CR, SR>>,
     Path(id): Path<String>,
     Json(payload): Json<ServiceOrderActionRequest>,
 ) -> Result<StatusCode, WorkshopApiError>
 where
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
     SR: ServiceOrderRepository + Clone + 'static,
 {
     let id: ServiceOrderId = id.parse()?;
@@ -168,31 +178,33 @@ where
 /// lengkap dengan `.with_state()`-nya sendiri. Pemanggil (`main.rs`/test)
 /// tinggal `.merge()` hasilnya dengan `Router` Core — TIDAK ADA lagi
 /// parameter generik gabungan Core+Workshop di titik mana pun.
-pub fn build_workshop_router<BR, SR>(state: WorkshopState<BR, SR>) -> Router
+pub fn build_workshop_router<BR, CR, SR>(state: WorkshopState<BR, CR, SR>) -> Router
 where
     BR: BusinessRepository + Clone + 'static,
+    CR: CustomerRepository + Clone + 'static,
     SR: ServiceOrderRepository + Clone + 'static,
 {
     Router::new()
         .route(
             "/businesses/{business_id}/service-orders",
-            post(create_service_order::<BR, SR>).get(list_service_orders_updated_since::<BR, SR>),
+            post(create_service_order::<BR, CR, SR>)
+                .get(list_service_orders_updated_since::<BR, CR, SR>),
         )
         .route(
             "/service-orders/{id}/start",
-            patch(start_service_order::<BR, SR>),
+            patch(start_service_order::<BR, CR, SR>),
         )
         .route(
             "/service-orders/{id}/complete",
-            patch(complete_service_order::<BR, SR>),
+            patch(complete_service_order::<BR, CR, SR>),
         )
         .route(
             "/service-orders/{id}/cancel",
-            patch(cancel_service_order::<BR, SR>),
+            patch(cancel_service_order::<BR, CR, SR>),
         )
         .route(
             "/service-orders/{id}",
-            axum::routing::delete(delete_service_order::<BR, SR>),
+            axum::routing::delete(delete_service_order::<BR, CR, SR>),
         )
         .with_state(Arc::new(state))
 }

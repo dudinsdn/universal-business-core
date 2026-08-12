@@ -134,6 +134,10 @@ impl IntoResponse for WorkshopApiError {
                         // membungkusnya jadi RepositoryError::Unavailable
                         // sebelum sempat jadi WorkshopError di level ini.
                         WorkshopError::UnknownStatus { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+                        // Sama seperti ApplicationError::CustomerNotFound
+                        // di Core: 404, bukan 409 — lihat komentar di
+                        // WorkshopError::CustomerNotFound.
+                        WorkshopError::CustomerNotFound => StatusCode::NOT_FOUND,
                     },
                     ServiceOrderError::ServiceOrderNotFound => StatusCode::NOT_FOUND,
                     ServiceOrderError::Repository(_) => StatusCode::INTERNAL_SERVER_ERROR,

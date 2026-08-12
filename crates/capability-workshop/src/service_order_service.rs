@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
-use domain::{Business, BusinessId, CustomerId, TransactionId};
+use domain::{Business, BusinessId, Customer, TransactionId, rules as domain_rules};
 
-use crate::error::ServiceOrderError;
+use crate::error::{ServiceOrderError, WorkshopError};
 use crate::repository::ServiceOrderRepository;
 use crate::rules;
 use crate::service_order::{ServiceOrder, ServiceOrderDescription, ServiceOrderId};
@@ -13,11 +13,13 @@ use crate::service_order::{ServiceOrder, ServiceOrderDescription, ServiceOrderId
 /// di Core) dikirim sebagai parameter, pola sama persis seperti
 /// `CustomerService`/`TransactionService` menerima `&Business`.
 ///
-/// Validasi "apakah `customer_id` benar-benar Customer yang ada dan
-/// milik Business yang sama" SENGAJA belum diimplementasikan — sesuai
-/// kesepakatan, ditunda sampai ada kebutuhan nyata (butuh
-/// `CustomerRepository` dari Core sebagai dependency tambahan kalau nanti
-/// dibutuhkan).
+/// `customer` diterima sebagai `&Customer` (BUKAN `CustomerId` mentah) —
+/// pemanggil (route) WAJIB mengambilnya lebih dulu lewat
+/// `application::CustomerService::get_customer`, supaya validasi
+/// `domain::rules::customer_belongs_to_business` bisa dilakukan di sini
+/// SEBELUM ServiceOrder dibuat. Pola sama persis seperti
+/// `TransactionService`/`RelationshipService`/`InteractionService` di
+/// Core (gap #3: validasi customer_id lintas-aggregate).
 #[derive(Clone)]
 pub struct ServiceOrderService<R: ServiceOrderRepository> {
     repository: R,
@@ -35,7 +37,7 @@ impl<R: ServiceOrderRepository> ServiceOrderService<R> {
         &self,
         business: &Business,
         id: ServiceOrderId,
-        customer_id: CustomerId,
+        customer: &Customer,
         description: ServiceOrderDescription,
     ) -> Result<(ServiceOrder, bool), ServiceOrderError> {
         if let Some(existing) = self.repository.find_by_id(id).await? {
@@ -44,7 +46,14 @@ impl<R: ServiceOrderRepository> ServiceOrderService<R> {
 
         rules::ensure_business_is_active(business.is_deleted())?;
 
-        let order = ServiceOrder::with_id(id, business.id(), customer_id, description);
+        // Info-hiding sengaja — lihat komentar di
+        // `WorkshopError::CustomerNotFound` dan pola yang sama di Core
+        // (`TransactionService::create_transaction`).
+        if !domain_rules::customer_belongs_to_business(customer.business_id(), business.id()) {
+            return Err(WorkshopError::CustomerNotFound.into());
+        }
+
+        let order = ServiceOrder::with_id(id, business.id(), customer.id(), description);
         self.repository.save(&order).await?;
         Ok((order, true))
     }
@@ -150,9 +159,8 @@ impl<R: ServiceOrderRepository> ServiceOrderService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::WorkshopError;
     use crate::in_memory::InMemoryServiceOrderRepository;
-    use domain::{BusinessName, BusinessType, Tenant, TenantName};
+    use domain::{BusinessName, BusinessType, CustomerName, Tenant, TenantName};
 
     fn active_business() -> Business {
         let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
@@ -167,15 +175,20 @@ mod tests {
         ServiceOrderDescription::new("Ganti oli dan servis rem").unwrap()
     }
 
+    fn sample_customer(business: &Business) -> Customer {
+        Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None)
+    }
+
     async fn create_test_order(
         service: &ServiceOrderService<InMemoryServiceOrderRepository>,
         business: &Business,
+        customer: &Customer,
     ) -> ServiceOrder {
         service
             .create_service_order(
                 business,
                 ServiceOrderId::new(),
-                CustomerId::new(),
+                customer,
                 sample_description(),
             )
             .await
@@ -188,8 +201,9 @@ mod tests {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let business = active_business();
+        let customer = sample_customer(&business);
 
-        let order = create_test_order(&service, &business).await;
+        let order = create_test_order(&service, &business, &customer).await;
 
         assert_eq!(order.business_id(), business.id());
     }
@@ -199,13 +213,14 @@ mod tests {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let mut business = active_business();
+        let customer = sample_customer(&business);
         business.soft_delete();
 
         let result = service
             .create_service_order(
                 &business,
                 ServiceOrderId::new(),
-                CustomerId::new(),
+                &customer,
                 sample_description(),
             )
             .await;
@@ -219,15 +234,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_service_order_rejects_customer_from_another_business() {
+        let repo = InMemoryServiceOrderRepository::new();
+        let service = ServiceOrderService::new(repo);
+        let business = active_business();
+        let other_business = active_business();
+        let foreign_customer = sample_customer(&other_business);
+
+        let result = service
+            .create_service_order(
+                &business,
+                ServiceOrderId::new(),
+                &foreign_customer,
+                sample_description(),
+            )
+            .await;
+
+        assert_eq!(
+            result,
+            Err(ServiceOrderError::Workshop(WorkshopError::CustomerNotFound))
+        );
+    }
+
+    #[tokio::test]
     async fn create_service_order_with_same_id_is_idempotent() {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let business = active_business();
+        let customer = sample_customer(&business);
         let id = ServiceOrderId::new();
-        let customer_id = CustomerId::new();
 
         let (first, first_created) = service
-            .create_service_order(&business, id, customer_id, sample_description())
+            .create_service_order(&business, id, &customer, sample_description())
             .await
             .unwrap();
         assert!(first_created);
@@ -239,7 +277,7 @@ mod tests {
             .create_service_order(
                 &business,
                 id,
-                customer_id,
+                &customer,
                 ServiceOrderDescription::new("Deskripsi lain").unwrap(),
             )
             .await
@@ -265,7 +303,8 @@ mod tests {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let business = active_business();
-        let order = create_test_order(&service, &business).await;
+        let customer = sample_customer(&business);
+        let order = create_test_order(&service, &business, &customer).await;
 
         let started = service
             .start_service_order(order.id(), order.version())
@@ -279,7 +318,8 @@ mod tests {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let business = active_business();
-        let order = create_test_order(&service, &business).await;
+        let customer = sample_customer(&business);
+        let order = create_test_order(&service, &business, &customer).await;
 
         let result = service
             .start_service_order(order.id(), order.version() + 1)
@@ -296,7 +336,8 @@ mod tests {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let business = active_business();
-        let order = create_test_order(&service, &business).await;
+        let customer = sample_customer(&business);
+        let order = create_test_order(&service, &business, &customer).await;
 
         let started = service
             .start_service_order(order.id(), order.version())
@@ -317,7 +358,8 @@ mod tests {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let business = active_business();
-        let order = create_test_order(&service, &business).await;
+        let customer = sample_customer(&business);
+        let order = create_test_order(&service, &business, &customer).await;
 
         let result = service
             .complete_service_order(order.id(), order.version(), None)
@@ -336,7 +378,8 @@ mod tests {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let business = active_business();
-        let order = create_test_order(&service, &business).await;
+        let customer = sample_customer(&business);
+        let order = create_test_order(&service, &business, &customer).await;
 
         let cancelled = service
             .cancel_service_order(order.id(), order.version())
@@ -351,7 +394,8 @@ mod tests {
         let repo = InMemoryServiceOrderRepository::new();
         let service = ServiceOrderService::new(repo);
         let business = active_business();
-        let order = create_test_order(&service, &business).await;
+        let customer = sample_customer(&business);
+        let order = create_test_order(&service, &business, &customer).await;
 
         service
             .delete_service_order(order.id(), order.version())
@@ -368,9 +412,11 @@ mod tests {
         let service = ServiceOrderService::new(repo);
         let business_a = active_business();
         let business_b = active_business();
+        let customer_a = sample_customer(&business_a);
+        let customer_b = sample_customer(&business_b);
 
-        create_test_order(&service, &business_a).await;
-        create_test_order(&service, &business_b).await;
+        create_test_order(&service, &business_a, &customer_a).await;
+        create_test_order(&service, &business_b, &customer_b).await;
 
         let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
         let changed = service

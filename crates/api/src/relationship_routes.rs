@@ -47,13 +47,22 @@ where
     let relationship_type = RelationshipType::new(payload.relationship_type)
         .map_err(application::ApplicationError::from)?;
 
+    // Ambil kedua Customer utuh — dibutuhkan RelationshipService untuk
+    // memvalidasi keduanya benar-benar milik Business yang sama (lihat
+    // rules::customer_belongs_to_business).
+    let from_customer = state
+        .customer_service
+        .get_customer(from_customer_id)
+        .await?;
+    let to_customer = state.customer_service.get_customer(to_customer_id).await?;
+
     let (relationship, created) = state
         .relationship_service
         .create_relationship(
             &business,
             id,
-            from_customer_id,
-            to_customer_id,
+            &from_customer,
+            &to_customer,
             relationship_type,
         )
         .await?;

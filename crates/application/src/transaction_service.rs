@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use domain::{
-    Business, BusinessId, CustomerId, Transaction, TransactionAmount, TransactionId,
-    TransactionKind, rules,
+    Business, BusinessId, Customer, Transaction, TransactionAmount, TransactionId, TransactionKind,
+    rules,
 };
 
 use crate::error::ApplicationError;
@@ -18,12 +18,13 @@ use crate::repository::TransactionRepository;
 /// `domain::transaction`): hanya `create` dan `delete` (soft delete) yang
 /// tersedia.
 ///
-/// Validasi "kalau `customer_id` diisi, harus milik Business yang sama"
-/// SENGAJA belum diimplementasikan — belum ada keputusan eksplisit soal
-/// itu. Ditambahkan nanti kalau memang dibutuhkan (butuh
-/// `CustomerRepository` sebagai dependency tambahan, konsisten dengan pola
-/// `TenantService::delete_tenant` yang menerima `BusinessRepository`
-/// sebagai parameter eksplisit untuk operasi lintas-aggregate).
+/// `customer` diterima sebagai `Option<&Customer>` (BUKAN `Option<CustomerId>`
+/// mentah) — pemanggil (route) WAJIB mengambilnya lebih dulu lewat
+/// `CustomerService::get_customer`, supaya validasi
+/// `rules::customer_belongs_to_business` bisa dilakukan di sini SEBELUM
+/// Transaction dibuat. Ini menutup gap: sebelumnya client bisa mengirim
+/// `customer_id` milik Business/Tenant lain dan tetap diterima begitu
+/// saja.
 #[derive(Clone)]
 pub struct TransactionService<R: TransactionRepository> {
     repository: R,
@@ -36,11 +37,17 @@ impl<R: TransactionRepository> TransactionService<R> {
 
     /// Membuat Transaction baru — idempotent terhadap `id`, alasan dan
     /// kontrak sama seperti `CustomerService::create_customer`.
+    ///
+    /// PENTING soal urutan: pengecekan idempotency ("apakah `id` sudah
+    /// ada") tetap paling pertama — sama seperti `BusinessService::
+    /// create_business` — supaya retry dengan payload identik tidak
+    /// salah ditolak. Validasi kepemilikan Customer dicek SETELAH
+    /// idempotency, SEBELUM entity dibuat.
     pub async fn create_transaction(
         &self,
         business: &Business,
         id: TransactionId,
-        customer_id: Option<CustomerId>,
+        customer: Option<&Customer>,
         kind: TransactionKind,
         amount: TransactionAmount,
         occurred_at: DateTime<Utc>,
@@ -51,6 +58,19 @@ impl<R: TransactionRepository> TransactionService<R> {
 
         rules::ensure_business_is_active(business.is_deleted())?;
 
+        if let Some(customer) = customer {
+            // Info-hiding sengaja: kalau Customer ada tapi milik
+            // Business/Tenant lain, dipetakan ke error yang SAMA seperti
+            // "tidak ditemukan" (bukan error khusus "bukan milik Anda")
+            // — supaya client tidak bisa membedakan "customer_id salah"
+            // dari "customer_id itu milik tenant lain" (lihat diskusi
+            // desain gap #3).
+            if !rules::customer_belongs_to_business(customer.business_id(), business.id()) {
+                return Err(ApplicationError::CustomerNotFound);
+            }
+        }
+
+        let customer_id = customer.map(|c| c.id());
         let transaction =
             Transaction::with_id(id, business.id(), customer_id, kind, amount, occurred_at);
         self.repository.save(&transaction).await?;
@@ -94,7 +114,7 @@ impl<R: TransactionRepository> TransactionService<R> {
 mod tests {
     use super::*;
     use crate::in_memory::InMemoryTransactionRepository;
-    use domain::{BusinessName, BusinessType, DomainError, Tenant, TenantName};
+    use domain::{BusinessName, BusinessType, CustomerName, DomainError, Tenant, TenantName};
 
     fn active_business() -> Business {
         let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
@@ -211,13 +231,13 @@ mod tests {
         let repo = InMemoryTransactionRepository::new();
         let service = TransactionService::new(repo);
         let business = active_business();
-        let customer_id = CustomerId::new();
+        let customer = Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None);
 
         let (transaction, _) = service
             .create_transaction(
                 &business,
                 TransactionId::new(),
-                Some(customer_id),
+                Some(&customer),
                 sample_kind(),
                 sample_amount(),
                 Utc::now(),
@@ -225,7 +245,35 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(transaction.customer_id(), Some(customer_id));
+        assert_eq!(transaction.customer_id(), Some(customer.id()));
+    }
+
+    #[tokio::test]
+    async fn create_transaction_rejects_customer_from_another_business() {
+        let repo = InMemoryTransactionRepository::new();
+        let service = TransactionService::new(repo);
+        let business = active_business();
+        let other_business = active_business();
+        // Customer ini sengaja dibuat di bawah Business LAIN — mensimulasikan
+        // client mengirim customer_id yang bukan miliknya.
+        let foreign_customer = Customer::new(
+            other_business.id(),
+            CustomerName::new("Budi").unwrap(),
+            None,
+        );
+
+        let result = service
+            .create_transaction(
+                &business,
+                TransactionId::new(),
+                Some(&foreign_customer),
+                sample_kind(),
+                sample_amount(),
+                Utc::now(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(ApplicationError::CustomerNotFound)));
     }
 
     #[tokio::test]

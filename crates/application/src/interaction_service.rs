@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use domain::{
-    Business, BusinessId, CustomerId, Interaction, InteractionId, InteractionNote, InteractionType,
+    Business, BusinessId, Customer, Interaction, InteractionId, InteractionNote, InteractionType,
     rules,
 };
 
@@ -17,11 +17,12 @@ use crate::repository::InteractionRepository;
 /// Interaction memang didesain immutable di layer domain: hanya `create`
 /// dan `delete` (soft delete) yang tersedia.
 ///
-/// Validasi bahwa `customer_id` benar-benar Customer yang ada dan milik
-/// Business yang sama SENGAJA belum diimplementasikan — belum ada
-/// keputusan eksplisit soal itu, konsisten dengan pola yang sama di
-/// `TransactionService`/`RelationshipService` (butuh `CustomerRepository`
-/// sebagai dependency tambahan kalau nanti dibutuhkan).
+/// `customer` diterima sebagai `&Customer` (BUKAN `CustomerId` mentah) —
+/// pemanggil (route) WAJIB mengambilnya lebih dulu lewat
+/// `CustomerService::get_customer`, supaya validasi
+/// `rules::customer_belongs_to_business` bisa dilakukan di sini SEBELUM
+/// Interaction dibuat. Pola sama seperti
+/// `TransactionService::create_transaction`/`RelationshipService::create_relationship`.
 #[derive(Clone)]
 pub struct InteractionService<R: InteractionRepository> {
     repository: R,
@@ -38,7 +39,7 @@ impl<R: InteractionRepository> InteractionService<R> {
         &self,
         business: &Business,
         id: InteractionId,
-        customer_id: CustomerId,
+        customer: &Customer,
         interaction_type: InteractionType,
         note: Option<InteractionNote>,
         occurred_at: DateTime<Utc>,
@@ -49,10 +50,16 @@ impl<R: InteractionRepository> InteractionService<R> {
 
         rules::ensure_business_is_active(business.is_deleted())?;
 
+        // Info-hiding sengaja — lihat komentar di
+        // `TransactionService::create_transaction`.
+        if !rules::customer_belongs_to_business(customer.business_id(), business.id()) {
+            return Err(ApplicationError::CustomerNotFound);
+        }
+
         let interaction = Interaction::with_id(
             id,
             business.id(),
-            customer_id,
+            customer.id(),
             interaction_type,
             note,
             occurred_at,
@@ -97,7 +104,7 @@ impl<R: InteractionRepository> InteractionService<R> {
 mod tests {
     use super::*;
     use crate::in_memory::InMemoryInteractionRepository;
-    use domain::{BusinessName, BusinessType, DomainError, Tenant, TenantName};
+    use domain::{BusinessName, BusinessType, CustomerName, DomainError, Tenant, TenantName};
 
     fn active_business() -> Business {
         let tenant = Tenant::new(TenantName::new("Tenant A").unwrap());
@@ -112,15 +119,20 @@ mod tests {
         InteractionType::new("call").unwrap()
     }
 
+    fn sample_customer(business: &Business) -> Customer {
+        Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None)
+    }
+
     async fn create_test_interaction(
         service: &InteractionService<InMemoryInteractionRepository>,
         business: &Business,
+        customer: &Customer,
     ) -> Interaction {
         service
             .create_interaction(
                 business,
                 InteractionId::new(),
-                CustomerId::new(),
+                customer,
                 sample_type(),
                 None,
                 Utc::now(),
@@ -135,8 +147,9 @@ mod tests {
         let repo = InMemoryInteractionRepository::new();
         let service = InteractionService::new(repo);
         let business = active_business();
+        let customer = sample_customer(&business);
 
-        let interaction = create_test_interaction(&service, &business).await;
+        let interaction = create_test_interaction(&service, &business, &customer).await;
 
         assert_eq!(interaction.business_id(), business.id());
     }
@@ -146,13 +159,14 @@ mod tests {
         let repo = InMemoryInteractionRepository::new();
         let service = InteractionService::new(repo);
         let mut business = active_business();
+        let customer = sample_customer(&business);
         business.soft_delete();
 
         let result = service
             .create_interaction(
                 &business,
                 InteractionId::new(),
-                CustomerId::new(),
+                &customer,
                 sample_type(),
                 None,
                 Utc::now(),
@@ -166,17 +180,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_interaction_rejects_customer_from_another_business() {
+        let repo = InMemoryInteractionRepository::new();
+        let service = InteractionService::new(repo);
+        let business = active_business();
+        let other_business = active_business();
+        let foreign_customer = sample_customer(&other_business);
+
+        let result = service
+            .create_interaction(
+                &business,
+                InteractionId::new(),
+                &foreign_customer,
+                sample_type(),
+                None,
+                Utc::now(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(ApplicationError::CustomerNotFound)));
+    }
+
+    #[tokio::test]
     async fn create_interaction_can_have_a_note() {
         let repo = InMemoryInteractionRepository::new();
         let service = InteractionService::new(repo);
         let business = active_business();
+        let customer = sample_customer(&business);
         let note = InteractionNote::new("Follow up minggu depan").unwrap();
 
         let (interaction, _) = service
             .create_interaction(
                 &business,
                 InteractionId::new(),
-                CustomerId::new(),
+                &customer,
                 sample_type(),
                 Some(note.clone()),
                 Utc::now(),
@@ -192,11 +229,11 @@ mod tests {
         let repo = InMemoryInteractionRepository::new();
         let service = InteractionService::new(repo);
         let business = active_business();
+        let customer = sample_customer(&business);
         let id = InteractionId::new();
-        let customer_id = CustomerId::new();
 
         let (first, first_created) = service
-            .create_interaction(&business, id, customer_id, sample_type(), None, Utc::now())
+            .create_interaction(&business, id, &customer, sample_type(), None, Utc::now())
             .await
             .unwrap();
         assert!(first_created);
@@ -207,7 +244,7 @@ mod tests {
             .create_interaction(
                 &business,
                 id,
-                customer_id,
+                &customer,
                 InteractionType::new("visit").unwrap(),
                 None,
                 Utc::now(),
@@ -226,9 +263,11 @@ mod tests {
         let service = InteractionService::new(repo);
         let business_a = active_business();
         let business_b = active_business();
+        let customer_a = sample_customer(&business_a);
+        let customer_b = sample_customer(&business_b);
 
-        create_test_interaction(&service, &business_a).await;
-        create_test_interaction(&service, &business_b).await;
+        create_test_interaction(&service, &business_a, &customer_a).await;
+        create_test_interaction(&service, &business_b, &customer_b).await;
 
         let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
         let changed = service
@@ -245,7 +284,8 @@ mod tests {
         let repo = InMemoryInteractionRepository::new();
         let service = InteractionService::new(repo);
         let business = active_business();
-        let interaction = create_test_interaction(&service, &business).await;
+        let customer = sample_customer(&business);
+        let interaction = create_test_interaction(&service, &business, &customer).await;
 
         let result = service
             .delete_interaction(interaction.id(), interaction.version() + 1)
@@ -262,7 +302,8 @@ mod tests {
         let repo = InMemoryInteractionRepository::new();
         let service = InteractionService::new(repo);
         let business = active_business();
-        let interaction = create_test_interaction(&service, &business).await;
+        let customer = sample_customer(&business);
+        let interaction = create_test_interaction(&service, &business, &customer).await;
 
         service
             .delete_interaction(interaction.id(), interaction.version())

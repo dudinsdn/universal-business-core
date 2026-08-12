@@ -57,6 +57,13 @@ where
         .map(|raw| raw.parse())
         .transpose()
         .map_err(application::ApplicationError::from)?;
+    // Ambil Customer utuh dulu (bukan cuma parse Id) — dibutuhkan
+    // TransactionService untuk memvalidasi Customer ini benar-benar
+    // milik Business yang sama (lihat rules::customer_belongs_to_business).
+    let customer = match customer_id {
+        Some(customer_id) => Some(state.customer_service.get_customer(customer_id).await?),
+        None => None,
+    };
     let kind = TransactionKind::new(payload.kind).map_err(application::ApplicationError::from)?;
     let amount =
         TransactionAmount::new(payload.amount).map_err(application::ApplicationError::from)?;
@@ -65,7 +72,7 @@ where
 
     let (transaction, created) = state
         .transaction_service
-        .create_transaction(&business, id, customer_id, kind, amount, occurred_at)
+        .create_transaction(&business, id, customer.as_ref(), kind, amount, occurred_at)
         .await?;
     let status = if created {
         StatusCode::CREATED

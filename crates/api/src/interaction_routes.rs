@@ -56,6 +56,10 @@ where
         .customer_id
         .parse()
         .map_err(application::ApplicationError::from)?;
+    // Ambil Customer utuh — dibutuhkan InteractionService untuk
+    // memvalidasi Customer ini benar-benar milik Business yang sama
+    // (lihat rules::customer_belongs_to_business).
+    let customer = state.customer_service.get_customer(customer_id).await?;
     let interaction_type = InteractionType::new(payload.interaction_type)
         .map_err(application::ApplicationError::from)?;
     let note = payload
@@ -71,7 +75,7 @@ where
         .create_interaction(
             &business,
             id,
-            customer_id,
+            &customer,
             interaction_type,
             note,
             occurred_at,

@@ -9,17 +9,19 @@ use api::{AppState, build_router};
 use capability_workshop::{InMemoryServiceOrderRepository, WorkshopState, build_workshop_router};
 
 /// Menggabungkan Core router + Workshop router — pola sama seperti
-/// `main.rs`. `business_service` disalin dari `core_state` SEBELUM
-/// `build_router` memindahnya, supaya Workshop memakai instance
-/// `BusinessRepository` YANG SAMA dengan Core (bukan repository
-/// in-memory terpisah yang datanya beda).
+/// `main.rs`. `business_service`/`customer_service` disalin dari
+/// `core_state` SEBELUM `build_router` memindahnya, supaya Workshop
+/// memakai instance `BusinessRepository`/`CustomerRepository` YANG SAMA
+/// dengan Core (bukan repository in-memory terpisah yang datanya beda).
 fn app() -> Router {
     let core_state = AppState::new_in_memory();
     let business_service_for_workshop = core_state.business_service.clone();
+    let customer_service_for_workshop = core_state.customer_service.clone();
     let core_router = build_router(core_state);
 
     let workshop_state = WorkshopState::new(
         business_service_for_workshop,
+        customer_service_for_workshop,
         InMemoryServiceOrderRepository::new(),
     );
     let workshop_router = build_workshop_router(workshop_state);
