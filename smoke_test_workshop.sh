@@ -44,6 +44,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if ! curl -sS --connect-timeout 2 -o /dev/null "$BASE"; then
+  echo
+  echo "ERROR: API server tidak dapat dihubungi"
+  echo "       $BASE"
+  echo
+  echo "=========================================="
+  echo "Hasil: $PASS PASS, $FAIL FAIL"
+  echo "=========================================="
+  exit 2
+fi
+
 check() {
   local desc="$1" expected="$2" actual="$3"
 
