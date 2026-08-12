@@ -5,7 +5,7 @@
 //! keputusan. Tidak ada akses database di sini, sehingga bisa di-unit-test
 //! tanpa infrastruktur apa pun.
 
-use crate::business::BusinessName;
+use crate::business::{BusinessId, BusinessName};
 use crate::error::DomainError;
 
 /// Business rule: nama Business harus unik dalam satu Tenant.
@@ -58,6 +58,26 @@ pub fn ensure_business_is_active(business_is_deleted: bool) -> Result<(), Domain
         return Err(DomainError::BusinessIsDeleted);
     }
     Ok(())
+}
+
+/// Predikat murni: apakah sebuah Customer benar-benar milik Business yang
+/// sedang diproses. Dipakai Application Service (`TransactionService`,
+/// `RelationshipService`, `InteractionService`, dan
+/// `capability_workshop::ServiceOrderService`) SEBELUM membuat entity
+/// yang mereferensikan `customer_id` — mencegah client mengirim
+/// `customer_id` milik Business/Tenant lain yang lolos begitu saja.
+///
+/// SENGAJA mengembalikan `bool`, BUKAN `Result<(), DomainError>` seperti
+/// rule lain di modul ini — keputusan mau dipetakan ke error APA
+/// (`ApplicationError::CustomerNotFound`, demi tidak membocorkan
+/// keberadaan data lintas-tenant lewat pesan error — lihat diskusi
+/// desain) adalah keputusan Application layer, bukan Domain. Domain di
+/// sini cukup menyatakan fakta, bukan menentukan konsekuensi HTTP-nya.
+pub fn customer_belongs_to_business(
+    customer_business_id: BusinessId,
+    business_id: BusinessId,
+) -> bool {
+    customer_business_id == business_id
 }
 
 #[cfg(test)]
@@ -150,5 +170,19 @@ mod tests {
     #[test]
     fn allows_customer_creation_when_business_is_active() {
         assert_eq!(ensure_business_is_active(false), Ok(()));
+    }
+
+    #[test]
+    fn customer_belongs_to_business_true_when_same_business() {
+        let business_id = BusinessId::new();
+        assert!(customer_belongs_to_business(business_id, business_id));
+    }
+
+    #[test]
+    fn customer_belongs_to_business_false_when_different_business() {
+        assert!(!customer_belongs_to_business(
+            BusinessId::new(),
+            BusinessId::new()
+        ));
     }
 }

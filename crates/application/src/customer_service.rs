@@ -41,6 +41,21 @@ impl<R: CustomerRepository> CustomerService<R> {
         Ok((customer, true))
     }
 
+    /// Mengambil satu Customer berdasarkan id. Dibutuhkan pemanggil (mis.
+    /// API) yang perlu objek `Customer` utuh sebelum memanggil use-case
+    /// lain, mis. `TransactionService::create_transaction`,
+    /// `RelationshipService::create_relationship`, dan
+    /// `InteractionService::create_interaction` — ketiganya butuh
+    /// `&Customer` (bukan `CustomerId` mentah) supaya bisa divalidasi
+    /// benar-benar milik `Business` yang sama sebelum dipakai. Pola sama
+    /// seperti `TenantService::get_tenant`/`BusinessService::get_business`.
+    pub async fn get_customer(&self, id: CustomerId) -> Result<Customer, ApplicationError> {
+        self.repository
+            .find_by_id(id)
+            .await?
+            .ok_or(ApplicationError::CustomerNotFound)
+    }
+
     /// Semua Customer di bawah satu Business yang berubah sejak `since` —
     /// dipakai endpoint incremental sync nanti (belum dibuat di tahap ini).
     pub async fn list_updated_since(
@@ -218,6 +233,28 @@ mod tests {
         assert!(!second_created);
         assert_eq!(second.id(), first.id());
         assert_eq!(second.name(), first.name());
+    }
+
+    #[tokio::test]
+    async fn get_customer_returns_saved_customer() {
+        let repo = InMemoryCustomerRepository::new();
+        let service = CustomerService::new(repo);
+        let business = active_business();
+        let created = create_test_customer(&service, &business, "Budi").await;
+
+        let fetched = service.get_customer(created.id()).await.unwrap();
+
+        assert_eq!(fetched.id(), created.id());
+    }
+
+    #[tokio::test]
+    async fn get_customer_fails_when_not_found() {
+        let repo = InMemoryCustomerRepository::new();
+        let service = CustomerService::new(repo);
+
+        let result = service.get_customer(CustomerId::new()).await;
+
+        assert!(matches!(result, Err(ApplicationError::CustomerNotFound)));
     }
 
     #[tokio::test]
