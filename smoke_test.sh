@@ -59,7 +59,7 @@ check() {
     echo "PASS  $desc (status $actual)"
     PASS=$((PASS + 1))
   else
-    echo "FAIL  $desc — expected $expected, dapat $actual"
+    echo "FAIL  $desc — expected $expected, got $actual"
     echo "      body: $(cat "$BODY" 2>/dev/null)"
     FAIL=$((FAIL + 1))
   fi
@@ -74,10 +74,10 @@ check_contains() {
     2>/dev/null)
 
   if [[ "$actual" == *"$substring"* ]]; then
-    echo "PASS  $desc (mengandung \"$substring\")"
+    echo "PASS  $desc (contain \"$substring\")"
     PASS=$((PASS + 1))
   else
-    echo "FAIL  $desc — \"$actual\" tidak mengandung \"$substring\""
+    echo "FAIL  $desc — \"$actual\" exclude \"$substring\""
     FAIL=$((FAIL + 1))
   fi
 }
@@ -94,7 +94,7 @@ check_json_field() {
     echo "PASS  $desc"
     PASS=$((PASS + 1))
   else
-    echo "FAIL  $desc — expected \"$expected\", dapat \"$actual\""
+    echo "FAIL  $desc — expected \"$expected\", got \"$actual\""
     FAIL=$((FAIL + 1))
   fi
 }
@@ -179,35 +179,28 @@ echo "=========================================="
 echo
 echo "=== 1. TENANT ==="
 
-echo "--- Create tenant valid ---"
 STATUS=$(req POST /tenants '{"name":"Tenant Smoke Test"}')
 check "POST /tenants valid" 201 "$STATUS"
 TENANT_ID=$(json_value id)
 echo "  tenant_id = $TENANT_ID"
 
-echo "--- Create tenant nama kosong ---"
 STATUS=$(req POST /tenants '{"name":"   "}')
 check "POST /tenants nama kosong -> 400" 400 "$STATUS"
 check_contains "error" "kosong" "pesan error nama kosong"
 
-echo "--- Get tenant valid ---"
 STATUS=$(req GET "/tenants/$TENANT_ID")
 check "GET /tenants/{id}" 200 "$STATUS"
 
-echo "--- Get tenant tidak ditemukan ---"
 STATUS=$(req GET "/tenants/00000000-0000-0000-0000-000000000000")
 check "GET /tenants/{id-random} -> 404" 404 "$STATUS"
 
-echo "--- Get tenant id invalid ---"
 STATUS=$(req GET "/tenants/bukan-uuid")
 check "GET /tenants/{id-invalid} -> 400" 400 "$STATUS"
 
-echo "--- Rename tenant versi benar ---"
 STATUS=$(req PATCH "/tenants/$TENANT_ID" \
   '{"name":"Tenant Smoke Test Baru","expected_version":0}')
 check "PATCH /tenants/{id} versi benar" 200 "$STATUS"
 
-echo "--- Rename tenant versi basi ---"
 STATUS=$(req PATCH "/tenants/$TENANT_ID" \
   '{"name":"Tenant Telat","expected_version":0}')
 check "PATCH /tenants/{id} versi basi -> 409" 409 "$STATUS"
@@ -216,31 +209,26 @@ check_contains "error" "versi" "pesan error optimistic locking tenant"
 echo
 echo "=== 2. BUSINESS ==="
 
-echo "--- Create business valid ---"
 STATUS=$(req POST "/tenants/$TENANT_ID/businesses" \
   '{"name":"Toko Baju","business_type":"retail"}')
 check "POST /tenants/{id}/businesses valid" 201 "$STATUS"
 BUSINESS_ID=$(json_value id)
 echo "  business_id = $BUSINESS_ID"
 
-echo "--- Create business nama duplikat ---"
 STATUS=$(req POST "/tenants/$TENANT_ID/businesses" \
   '{"name":"Toko Baju","business_type":"retail"}')
 check "POST .../businesses nama duplikat -> 409" 409 "$STATUS"
 check_contains "error" "nama business" "pesan error nama business duplikat"
 
-echo "--- Create business tenant tidak ditemukan ---"
 STATUS=$(req POST \
   "/tenants/00000000-0000-0000-0000-000000000000/businesses" \
   '{"name":"X","business_type":"retail"}')
 check "POST .../businesses tenant tidak ada -> 404" 404 "$STATUS"
 
-echo "--- Rename business versi benar ---"
 STATUS=$(req PATCH "/businesses/$BUSINESS_ID" \
   '{"name":"Toko Baju Baru","expected_version":0}')
 check "PATCH /businesses/{id} versi benar" 200 "$STATUS"
 
-echo "--- Rename business versi basi ---"
 STATUS=$(req PATCH "/businesses/$BUSINESS_ID" \
   '{"name":"Telat","expected_version":0}')
 check "PATCH /businesses/{id} versi basi -> 409" 409 "$STATUS"
@@ -248,7 +236,6 @@ check "PATCH /businesses/{id} versi basi -> 409" 409 "$STATUS"
 echo
 echo "=== 3. CUSTOMER ==="
 
-echo "--- Create customer valid + phone ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
   '{"name":"Budi Santoso","phone":"081234567890"}')
 check "POST /businesses/{id}/customers valid" 201 "$STATUS"
@@ -258,41 +245,34 @@ echo "  customer_id = $CUSTOMER_ID"
 check_json_field "phone" "081234567890" \
   "customer menyimpan nomor telepon"
 
-echo "--- Create customer nama kosong ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
   '{"name":"   "}')
 check "POST customer nama kosong -> 400" 400 "$STATUS"
 check_contains "error" "kosong" "pesan error nama customer kosong"
 
-echo "--- Create customer phone invalid ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
   '{"name":"Customer Invalid Phone","phone":"abc"}')
 check "POST customer phone invalid -> 400" 400 "$STATUS"
 
-echo "--- Rename customer versi benar ---"
 STATUS=$(req PATCH "/customers/$CUSTOMER_ID" \
   '{"name":"Budi Santoso Baru","expected_version":0}')
 check "PATCH /customers/{id} versi benar" 200 "$STATUS"
 
-echo "--- Rename customer versi basi ---"
 STATUS=$(req PATCH "/customers/$CUSTOMER_ID" \
   '{"name":"Budi Telat","expected_version":0}')
 check "PATCH /customers/{id} versi basi -> 409" 409 "$STATUS"
 check_contains "error" "versi" "pesan error optimistic locking customer"
 
-echo "--- Update phone versi benar ---"
 STATUS=$(req PATCH "/customers/$CUSTOMER_ID/phone" \
   '{"phone":"081298765432","expected_version":1}')
 check "PATCH /customers/{id}/phone versi benar" 200 "$STATUS"
 check_json_field "phone" "081298765432" \
   "nomor telepon customer berhasil diubah"
 
-echo "--- Update phone versi basi ---"
 STATUS=$(req PATCH "/customers/$CUSTOMER_ID/phone" \
   '{"phone":"081211111111","expected_version":1}')
 check "PATCH /customers/{id}/phone versi basi -> 409" 409 "$STATUS"
 
-echo "--- Clear phone ---"
 STATUS=$(req PATCH "/customers/$CUSTOMER_ID/phone" \
   '{"phone":null,"expected_version":2}')
 check "PATCH /customers/{id}/phone null -> 200" 200 "$STATUS"
@@ -302,7 +282,6 @@ check_json_field "phone" "None" \
 echo
 echo "=== 4. TRANSACTION ==="
 
-echo "--- Create transaction linked customer ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
   '{
     "customer_id":"'"$CUSTOMER_ID"'",
@@ -321,24 +300,20 @@ check_json_field "amount" "50000" \
 check_json_field "customer_id" "$CUSTOMER_ID" \
   "transaction terhubung ke customer"
 
-echo "--- Create transaction kind kosong ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
   '{"kind":"   ","amount":10000}')
 check "POST transaction kind kosong -> 400" 400 "$STATUS"
 
-echo "--- Create transaction kind invalid ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
   '{"kind":"sale online","amount":10000}')
 check "POST transaction kind invalid -> 400" 400 "$STATUS"
 
-echo "--- Create transaction amount nol ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
   '{"kind":"sale","amount":0}')
 check "POST transaction amount 0 -> 400" 400 "$STATUS"
 check_contains "error" "lebih besar dari nol" \
   "pesan error amount tidak valid"
 
-echo "--- Create transaction amount negatif ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/transactions" \
   '{"kind":"sale","amount":-1}')
 check "POST transaction amount negatif -> 400" 400 "$STATUS"
@@ -360,6 +335,7 @@ check_json_field "name" "Tenant Idempotent" \
   "retry tenant mengembalikan entity pertama"
 
 IDEMP_BUSINESS=$(python3 -c 'import uuid; print(uuid.uuid4())')
+echo "  idemp_business_id = $IDEMP_BUSINESS"
 
 STATUS=$(req POST "/tenants/$IDEMP_TENANT/businesses" \
   '{"id":"'"$IDEMP_BUSINESS"'","name":"Bisnis Idem","business_type":"retail"}')
@@ -522,14 +498,12 @@ assert_yes "$(deleted_id_is_true "$SYNC_TRANSACTION_ID")" \
 echo
 echo "=== 10. RELATIONSHIP ==="
 
-echo "--- Create customer kedua untuk relationship ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/customers" \
   '{"name":"Ani Wijaya"}')
 check "POST customer kedua untuk relationship" 201 "$STATUS"
 CUSTOMER_B_ID=$(json_value id)
 echo "  customer_b_id = $CUSTOMER_B_ID"
 
-echo "--- Create relationship valid ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
   '{
     "from_customer_id":"'"$CUSTOMER_ID"'",
@@ -547,7 +521,6 @@ check_json_field "from_customer_id" "$CUSTOMER_ID" \
 check_json_field "to_customer_id" "$CUSTOMER_B_ID" \
   "relationship to_customer_id sesuai"
 
-echo "--- Create relationship ke diri sendiri ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
   '{
     "from_customer_id":"'"$CUSTOMER_ID"'",
@@ -558,7 +531,6 @@ check "POST relationship self -> 409" 409 "$STATUS"
 check_contains "error" "tidak bisa berelasi dengan dirinya sendiri" \
   "pesan error self-relationship"
 
-echo "--- Create relationship jenis kosong ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
   '{
     "from_customer_id":"'"$CUSTOMER_ID"'",
@@ -567,7 +539,6 @@ STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
   }')
 check "POST relationship jenis kosong -> 400" 400 "$STATUS"
 
-echo "--- Create relationship jenis invalid ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
   '{
     "from_customer_id":"'"$CUSTOMER_ID"'",
@@ -576,7 +547,6 @@ STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
   }')
 check "POST relationship jenis invalid -> 400" 400 "$STATUS"
 
-echo "--- Create relationship business tidak ditemukan ---"
 STATUS=$(req POST \
   "/businesses/00000000-0000-0000-0000-000000000000/relationships" \
   '{
@@ -586,7 +556,6 @@ STATUS=$(req POST \
   }')
 check "POST relationship business tidak ada -> 404" 404 "$STATUS"
 
-echo "--- Idempotent create relationship ---"
 IDEMP_RELATIONSHIP=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 STATUS=$(req POST "/businesses/$BUSINESS_ID/relationships" \
@@ -648,7 +617,6 @@ assert_yes "$(deleted_id_is_true "$SYNC_RELATIONSHIP_ID")" \
 echo
 echo "=== 12. INTERACTION ==="
 
-echo "--- Create interaction dengan note ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
   '{
     "customer_id":"'"$CUSTOMER_ID"'",
@@ -667,7 +635,6 @@ check_json_field "customer_id" "$CUSTOMER_ID" \
 check_json_field "note" "Follow up jadwal kontrol" \
   "interaction note tersimpan"
 
-echo "--- Create interaction tanpa note ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
   '{
     "customer_id":"'"$CUSTOMER_ID"'",
@@ -677,7 +644,6 @@ check "POST interaction tanpa note -> 201" 201 "$STATUS"
 check_json_field "note" "None" \
   "interaction tanpa note tersimpan sebagai null"
 
-echo "--- Create interaction note kosong ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
   '{
     "customer_id":"'"$CUSTOMER_ID"'",
@@ -686,7 +652,6 @@ STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
   }')
 check "POST interaction note kosong -> 400" 400 "$STATUS"
 
-echo "--- Create interaction jenis kosong ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
   '{
     "customer_id":"'"$CUSTOMER_ID"'",
@@ -694,7 +659,6 @@ STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
   }')
 check "POST interaction jenis kosong -> 400" 400 "$STATUS"
 
-echo "--- Create interaction jenis invalid ---"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
   '{
     "customer_id":"'"$CUSTOMER_ID"'",
@@ -702,7 +666,6 @@ STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
   }')
 check "POST interaction jenis invalid -> 400" 400 "$STATUS"
 
-echo "--- Create interaction business tidak ditemukan ---"
 STATUS=$(req POST \
   "/businesses/00000000-0000-0000-0000-000000000000/interactions" \
   '{
@@ -711,7 +674,6 @@ STATUS=$(req POST \
   }')
 check "POST interaction business tidak ada -> 404" 404 "$STATUS"
 
-echo "--- Idempotent create interaction ---"
 IDEMP_INTERACTION=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 STATUS=$(req POST "/businesses/$BUSINESS_ID/interactions" \
@@ -770,17 +732,14 @@ assert_yes "$(deleted_id_is_true "$SYNC_INTERACTION_ID")" \
 echo
 echo "=== 14. SOFT DELETE / OPTIMISTIC LOCKING ==="
 
-echo "--- Business aktif tidak boleh menghapus tenant ---"
 STATUS=$(req DELETE "/tenants/$TENANT_ID" \
   '{"expected_version":1}')
 check "DELETE tenant dengan business aktif -> 409" 409 "$STATUS"
 
-echo "--- Delete business utama ---"
 STATUS=$(req DELETE "/businesses/$BUSINESS_ID" \
   '{"expected_version":1}')
 check "DELETE /businesses/{id} -> 204" 204 "$STATUS"
 
-echo "--- Tenant setelah business dihapus ---"
 STATUS=$(req DELETE "/tenants/$TENANT_ID" \
   '{"expected_version":1}')
 check "DELETE /tenants/{id} -> 204" 204 "$STATUS"
