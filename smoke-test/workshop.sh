@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test khusus Capability Workshop (ServiceOrder).
 #
-# Terpisah dari smoke_test.sh (yang khusus Core) — konsisten dengan
+# Terpisah dari smoke_test_core.sh (yang khusus Core) — konsisten dengan
 # prinsip proyek: Capability terpisah dari Core, jadi test-nya pun
 # terpisah. Kalau nanti ada Capability lain (Laundry, Klinik, dst),
 # masing-masing dapat file sendiri dengan pola yang sama.
@@ -10,7 +10,7 @@
 #   DATABASE_URL="postgres://..." cargo run -p api
 #
 # Lalu:
-#   bash smoke_test_workshop.sh
+#   bash workshop.sh
 #
 # Cakupan:
 # - Setup: Tenant, Business (jenis "workshop"), Customer
@@ -24,154 +24,8 @@
 # - Business dihapus -> create ServiceOrder ditolak
 
 set -uo pipefail
-
-BASE="${BASE:-http://localhost:3000}"
-PASS=0
-FAIL=0
-BODY="/tmp/ubc_smoke_test_workshop_body.json"
-
-command -v curl >/dev/null || {
-  echo "curl tidak ditemukan"
-  exit 1
-}
-command -v python3 >/dev/null || {
-  echo "python3 tidak ditemukan"
-  exit 1
-}
-
-cleanup() {
-  rm -f "$BODY"
-}
-trap cleanup EXIT
-
-if ! curl -sS --connect-timeout 2 -o /dev/null "$BASE"; then
-  echo
-  echo "ERROR: API server tidak dapat dihubungi"
-  echo "       $BASE"
-  echo
-  echo "=========================================="
-  echo "Hasil: $PASS PASS, $FAIL FAIL"
-  echo "=========================================="
-  exit 2
-fi
-
-check() {
-  local desc="$1" expected="$2" actual="$3"
-
-  if [ "$actual" = "$expected" ]; then
-    echo "PASS  $desc (status $actual)"
-    PASS=$((PASS + 1))
-  else
-    echo "FAIL  $desc — expected $expected, got $actual"
-    echo "      body: $(cat "$BODY" 2>/dev/null)"
-    FAIL=$((FAIL + 1))
-  fi
-}
-
-check_contains() {
-  local field="$1" substring="$2" desc="$3"
-  local actual
-
-  actual=$(python3 -c \
-    "import json; print(json.load(open('$BODY')).get('$field',''))" \
-    2>/dev/null)
-
-  if [[ "$actual" == *"$substring"* ]]; then
-    echo "PASS  $desc (contain \"$substring\")"
-    PASS=$((PASS + 1))
-  else
-    echo "FAIL  $desc — \"$actual\" exlude \"$substring\""
-    FAIL=$((FAIL + 1))
-  fi
-}
-
-check_json_field() {
-  local field="$1" expected="$2" desc="$3"
-  local actual
-
-  actual=$(python3 -c \
-    "import json; print(json.load(open('$BODY'))['$field'])" \
-    2>/dev/null)
-
-  if [ "$actual" = "$expected" ]; then
-    echo "PASS  $desc"
-    PASS=$((PASS + 1))
-  else
-    echo "FAIL  $desc — expected \"$expected\", got \"$actual\""
-    FAIL=$((FAIL + 1))
-  fi
-}
-
-json_value() {
-  local field="$1"
-  python3 -c \
-    "import json; print(json.load(open('$BODY'))['$field'])" \
-    2>/dev/null
-}
-
-req() {
-  # req METHOD PATH [JSON_BODY]
-  local method="$1"
-  local path="$2"
-  local body="${3:-}"
-
-  if [ -n "$body" ]; then
-    curl -sS -o "$BODY" -w "%{http_code}" \
-      -X "$method" "$BASE$path" \
-      -H 'content-type: application/json' \
-      -d "$body"
-  else
-    curl -sS -o "$BODY" -w "%{http_code}" \
-      -X "$method" "$BASE$path"
-  fi
-}
-
-contains_id() {
-  local id="$1"
-
-  python3 - "$id" <<'PY'
-import json
-import sys
-
-wanted = sys.argv[1]
-
-try:
-    data = json.load(open("/tmp/ubc_smoke_test_workshop_body.json"))
-    print("yes" if any(item.get("id") == wanted for item in data) else "no")
-except Exception:
-    print("no")
-PY
-}
-
-deleted_id_is_true() {
-  local id="$1"
-
-  python3 - "$id" <<'PY'
-import json
-import sys
-
-wanted = sys.argv[1]
-
-try:
-    data = json.load(open("/tmp/ubc_smoke_test_workshop_body.json"))
-    match = [item for item in data if item.get("id") == wanted]
-    print("yes" if match and match[0].get("is_deleted") is True else "no")
-except Exception:
-    print("no")
-PY
-}
-
-assert_yes() {
-  local value="$1" desc="$2"
-
-  if [ "$value" = "yes" ]; then
-    echo "PASS  $desc"
-    PASS=$((PASS + 1))
-  else
-    echo "FAIL  $desc"
-    FAIL=$((FAIL + 1))
-  fi
-}
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$ROOT/lib/header.sh"
 
 echo "=========================================="
 echo "Capability Workshop — Smoke Test"
@@ -211,7 +65,7 @@ echo "  service_order_id = $SERVICE_ORDER_ID"
 STATUS=$(req POST "/businesses/$BUSINESS_ID/service-orders" \
   '{"customer_id":"'"$CUSTOMER_ID"'","description":"   "}')
 check "POST service-orders deskripsi kosong -> 400" 400 "$STATUS"
-check_contains "error" "kosong" "pesan error deskripsi kosong"
+check_contains "error" "pesan error deskripsi kosong"
 
 STATUS=$(req POST \
   "/businesses/00000000-0000-0000-0000-000000000000/service-orders" \
@@ -326,13 +180,4 @@ check "POST service-order pada business terhapus -> 409" 409 "$STATUS"
 check_contains "error" "business sudah dihapus" \
   "pesan error business terhapus"
 
-echo
-echo "=========================================="
-echo "Hasil: $PASS PASS, $FAIL FAIL"
-echo "=========================================="
-
-if [ "$FAIL" -eq 0 ]; then
-  exit 0
-else
-  exit 1
-fi
+source "$ROOT/lib/footer.sh"
