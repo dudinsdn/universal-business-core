@@ -1,0 +1,2629 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Universal Business Core
+meta:
+  id: wrk_eb66d11ce4c54cd298807fc5b5626864
+  created: 1786711260781
+  modified: 1786711260781
+  description: ""
+collection:
+  - name: 1. Tenant
+    meta:
+      id: fld_781a3f06fb8f4288964ea763111df1cd
+      created: 1786711260791
+      modified: 1786771694822
+      sortKey: 1000
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/tenants"
+        name: 1.1 Create Tenant
+        meta:
+          id: req_72a97afa5c5e464696812239d1b8fad1
+          created: 1786711260793
+          modified: 1786712998158
+          isPrivate: false
+          description: ""
+          sortKey: 1000
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Tenant A"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Create Tenant -> 201 Created', () => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+            insomnia.environment.set('tenant_id', body.id);
+            insomnia.environment.set('tenant_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/tenants/{{ _.tenant_id }}"
+        name: 1.2 Get Tenant
+        meta:
+          id: req_23c7651c4a6c4a19803998fd58ced374
+          created: 1786711260796
+          modified: 1786767883467
+          isPrivate: false
+          description: ""
+          sortKey: 2000
+        method: GET
+        scripts:
+          afterResponse: |-
+            insomnia.test('Get Tenant -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/tenants"
+        name: 1.3 List Tenants (incremental sync)
+        meta:
+          id: req_2416061dda1c4739aa247b3548cd7577
+          created: 1786711260799
+          modified: 1786711260799
+          isPrivate: false
+          description: ""
+          sortKey: 3000
+        method: GET
+        parameters:
+          - name: updated_since
+            value: ""
+            description: RFC 3339, contoh 2026-08-01T00:00:00Z
+            disabled: true
+        scripts:
+          afterResponse: |-
+            insomnia.test('List Tenants -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/tenants/{{ _.tenant_id }}"
+        name: 1.4 Rename Tenant
+        meta:
+          id: req_c83f555817244bab9f762d15e5a6bcce
+          created: 1786711260801
+          modified: 1786716913647
+          isPrivate: false
+          description: ""
+          sortKey: 4000
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+            	"name": "Tenant A Baru",
+            	"expected_version": {{ _.tenant_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Rename Tenant -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+            insomnia.environment.set('tenant_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 2. Business
+    meta:
+      id: fld_19b4d739ba054174910af585ee586342
+      created: 1786711260804
+      modified: 1786771696044
+      sortKey: 2000
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/tenants/{{ _.tenant_id }}/businesses"
+        name: 2.1 Create Business
+        meta:
+          id: req_4f9cc4acd3d34a08b3de3f2245db3f2b
+          created: 1786711260805
+          modified: 1786711260805
+          isPrivate: false
+          description: ""
+          sortKey: 1000
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Toko Baju",
+              "business_type": "retail"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Create Business -> 201 Created', () => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+            insomnia.environment.set('business_id', body.id);
+            insomnia.environment.set('business_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/tenants/{{ _.tenant_id }}/businesses"
+        name: 2.2 List Businesses by Tenant (incremental sync)
+        meta:
+          id: req_303700a1cea64206be7e986d6f353c30
+          created: 1786711260809
+          modified: 1786711260809
+          isPrivate: false
+          description: ""
+          sortKey: 2000
+        method: GET
+        parameters:
+          - name: updated_since
+            value: ""
+            disabled: true
+        scripts:
+          afterResponse: |-
+            insomnia.test('List Businesses -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}"
+        name: 2.3 Rename Business
+        meta:
+          id: req_53c25fb5fc0b415db0007ba1f3a69dc2
+          created: 1786711260811
+          modified: 1786711731561
+          isPrivate: false
+          description: ""
+          sortKey: 3000
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Toko Baju Baru",
+              "expected_version": {{ _.business_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Rename Business -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+            insomnia.environment.set('business_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 3. Customer
+    meta:
+      id: fld_9a9c0a788ba6474daee2653069ac409f
+      created: 1786711260812
+      modified: 1786771697576
+      sortKey: 3000
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/customers"
+        name: 3.1 Create Customer (Budi)
+        meta:
+          id: req_d1a46ac9ce11458b9ea7a2922fba952c
+          created: 1786711260814
+          modified: 1786768716617
+          isPrivate: false
+          description: ""
+          sortKey: 1000
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Budi Santoso",
+              "phone": "081234567890"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Create Customer -> 201 Created', () => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+            insomnia.environment.set('customer_id', body.id);
+            insomnia.environment.set('customer_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/customers"
+        name: 3.2 Create Customer B (Ani, untuk Relationship)
+        meta:
+          id: req_a2fd8b0ed19d40699f350f38f6fdf7ce
+          created: 1786711260816
+          modified: 1786711260816
+          isPrivate: false
+          description: ""
+          sortKey: 1500
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Ani Wijaya"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Create Customer B -> 201 Created', () => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+            insomnia.environment.set('customer_b_id', body.id);
+            insomnia.environment.set('customer_b_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/customers"
+        name: 3.3 List Customers by Business (incremental sync)
+        meta:
+          id: req_5fc42b8b51cf4948ae5624ad18be63a8
+          created: 1786711260818
+          modified: 1786711260818
+          isPrivate: false
+          description: ""
+          sortKey: 2000
+        method: GET
+        parameters:
+          - name: updated_since
+            value: ""
+            disabled: true
+        scripts:
+          afterResponse: |-
+            insomnia.test('List Customers -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/customers/{{ _.customer_id }}"
+        name: 3.4 Rename Customer
+        meta:
+          id: req_2f79adfe9e0d4aa79b0ea4cfb04a6fcf
+          created: 1786711260820
+          modified: 1786711793787
+          isPrivate: false
+          description: ""
+          sortKey: 3000
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Budi Santoso Baru",
+              "expected_version": {{ _.customer_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Rename Customer -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+            insomnia.environment.set('customer_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/customers/{{ _.customer_id }}/phone"
+        name: 3.5 Update Customer Phone
+        meta:
+          id: req_c547c46dabc14bacadfdb88afed23512
+          created: 1786711260823
+          modified: 1786711260823
+          isPrivate: false
+          description: ""
+          sortKey: 4000
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "phone": "089999999999",
+              "expected_version": {{ _.customer_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Update Customer Phone -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+            insomnia.environment.set('customer_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/customers/{{ _.customer_id }}/phone"
+        name: 3.6 Clear Customer Phone
+        meta:
+          id: req_6f225945efca48d0b531ea79382ab21a
+          created: 1786711260825
+          modified: 1786711260825
+          isPrivate: false
+          description: ""
+          sortKey: 5000
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "phone": null,
+              "expected_version": {{ _.customer_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Clear Customer Phone -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+            insomnia.environment.set('customer_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 4. Transaction
+    meta:
+      id: fld_b8e60dbd409d4074803be046e5c293a4
+      created: 1786711260826
+      modified: 1786771698079
+      sortKey: 4000
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/transactions"
+        name: 4.1 Create Transaction
+        meta:
+          id: req_1dd7e4c69b3242b2819bc33099bbcad2
+          created: 1786711260828
+          modified: 1786711260828
+          isPrivate: false
+          description: ""
+          sortKey: 1000
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "customer_id": "{{ _.customer_id }}",
+              "kind": "sale",
+              "amount": 50000,
+              "occurred_at": "2026-08-08T00:00:00Z"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Create Transaction -> 201 Created', () => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+            insomnia.environment.set('transaction_id', body.id);
+            insomnia.environment.set('transaction_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/transactions"
+        name: 4.2 List Transactions by Business (incremental sync)
+        meta:
+          id: req_cc1e2fa2d7824df79a2c81a36a8e76bc
+          created: 1786711260829
+          modified: 1786711260829
+          isPrivate: false
+          description: ""
+          sortKey: 2000
+        method: GET
+        parameters:
+          - name: updated_since
+            value: ""
+            disabled: true
+        scripts:
+          afterResponse: |-
+            insomnia.test('List Transactions -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 5. Relationship
+    meta:
+      id: fld_e2ff0361edf945ff81f330b00f342f6f
+      created: 1786711260831
+      modified: 1786771698593
+      sortKey: 5000
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/relationships"
+        name: 5.1 Create Relationship
+        meta:
+          id: req_75c25d5b44144aa1a787d19848ab8caf
+          created: 1786711260833
+          modified: 1786711836305
+          isPrivate: false
+          description: ""
+          sortKey: 1000
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "from_customer_id": "{{ _.customer_id }}",
+              "to_customer_id": "{{ _.customer_b_id }}",
+              "relationship_type": "sibling"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Create Relationship -> 201 Created', () => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+            insomnia.environment.set('relationship_id', body.id);
+            insomnia.environment.set('relationship_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/relationships"
+        name: 5.2 List Relationships by Business (incremental sync)
+        meta:
+          id: req_38872ac731cb46058cd4ed44bb0f8ba1
+          created: 1786711260835
+          modified: 1786711260835
+          isPrivate: false
+          description: ""
+          sortKey: 2000
+        method: GET
+        parameters:
+          - name: updated_since
+            value: ""
+            disabled: true
+        scripts:
+          afterResponse: |-
+            insomnia.test('List Relationships -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 6. Interaction
+    meta:
+      id: fld_16dee1a130dd4e10b8e626ccce519c42
+      created: 1786711260836
+      modified: 1786771698805
+      sortKey: 6000
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/interactions"
+        name: 6.1 Create Interaction
+        meta:
+          id: req_680a58952d974f61bdd737751cceb98b
+          created: 1786711260837
+          modified: 1786711260837
+          isPrivate: false
+          description: ""
+          sortKey: 1000
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "customer_id": "{{ _.customer_id }}",
+              "interaction_type": "call",
+              "note": "Follow up jadwal kontrol",
+              "occurred_at": "2026-08-08T02:00:00Z"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Create Interaction -> 201 Created', () => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+            insomnia.environment.set('interaction_id', body.id);
+            insomnia.environment.set('interaction_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/interactions"
+        name: 6.2 List Interactions by Business (incremental sync)
+        meta:
+          id: req_96bae5ad07b549f3bda277c62031dbe4
+          created: 1786711260839
+          modified: 1786711260839
+          isPrivate: false
+          description: ""
+          sortKey: 2000
+        method: GET
+        parameters:
+          - name: updated_since
+            value: ""
+            disabled: true
+        scripts:
+          afterResponse: |-
+            insomnia.test('List Interactions -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 7. Workshop - ServiceOrder
+    meta:
+      id: fld_502d2fd3d88a43b89ac21dca6a5cb62a
+      created: 1786711260842
+      modified: 1786771700197
+      sortKey: 7000
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/service-orders"
+        name: 7.1 Create ServiceOrder
+        meta:
+          id: req_fd82353e838b4f1995fd8c8e6ed4ad2a
+          created: 1786711260843
+          modified: 1786711260843
+          isPrivate: false
+          description: ""
+          sortKey: 1000
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "customer_id": "{{ _.customer_id }}",
+              "description": "Ganti oli dan servis rem"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            const body = insomnia.response.json();
+            insomnia.test('Create ServiceOrder -> 201 Created', () => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+            insomnia.environment.set('service_order_id', body.id);
+            insomnia.environment.set('service_order_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/service-orders"
+        name: 7.2 List ServiceOrders by Business (incremental sync)
+        meta:
+          id: req_4f4374b07f7f4351baf3eab95b27635a
+          created: 1786711260845
+          modified: 1786711260845
+          isPrivate: false
+          description: ""
+          sortKey: 2000
+        method: GET
+        parameters:
+          - name: updated_since
+            value: ""
+            disabled: true
+        scripts:
+          afterResponse: |-
+            insomnia.test('List ServiceOrders -> 200 OK', () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/service-orders/{{ _.service_order_id }}/start"
+        name: 7.3 Start ServiceOrder
+        meta:
+          id: req_79a18f4b9047409f891f2ff6e62f1b0d
+          created: 1786711260847
+          modified: 1786711897069
+          isPrivate: false
+          description: ""
+          sortKey: 3000
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.service_order_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: >-
+            const body = insomnia.response.json();
+
+            insomnia.test('Start ServiceOrder -> 200 OK, status in_progress', ()
+            => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+              insomnia.expect(body.status).to.equal('in_progress');
+            });
+
+            insomnia.environment.set('service_order_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/service-orders/{{ _.service_order_id }}/complete"
+        name: 7.4 Complete ServiceOrder (link Transaction)
+        meta:
+          id: req_07933b60c26140779b54435023901643
+          created: 1786711260849
+          modified: 1786711919214
+          isPrivate: false
+          description: ""
+          sortKey: 4000
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.service_order_version }},
+              "transaction_id": "{{ _.transaction_id }}"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: >-
+            const body = insomnia.response.json();
+
+            insomnia.test('Complete ServiceOrder -> 200 OK, status completed',
+            () => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+              insomnia.expect(body.status).to.equal('completed');
+            });
+
+            insomnia.environment.set('service_order_version', body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/service-orders"
+        name: 7.5 Create ServiceOrder (untuk demo Cancel)
+        meta:
+          id: req_726a6ee532654c5fafbea1cb37f1b5d2
+          created: 1786711260852
+          modified: 1786711260852
+          isPrivate: false
+          description: ""
+          sortKey: 5000
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "customer_id": "{{ _.customer_id }}",
+              "description": "Servis yang akan dibatalkan"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: >-
+            const body = insomnia.response.json();
+
+            insomnia.test('Create ServiceOrder (cancel demo) -> 201 Created', ()
+            => {
+              insomnia.expect(insomnia.response.code).to.equal(201);
+            });
+
+            insomnia.environment.set('service_order_cancel_id', body.id);
+
+            insomnia.environment.set('service_order_cancel_version',
+            body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/service-orders/{{ _.service_order_cancel_id }}/cancel"
+        name: 7.6 Cancel ServiceOrder
+        meta:
+          id: req_511aad189cdf437ab451d051b1eb8dc2
+          created: 1786711260853
+          modified: 1786711955481
+          isPrivate: false
+          description: ""
+          sortKey: 6000
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.service_order_cancel_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: >-
+            const body = insomnia.response.json();
+
+            insomnia.test('Cancel ServiceOrder -> 200 OK, status cancelled', ()
+            => {
+              insomnia.expect(insomnia.response.code).to.equal(200);
+              insomnia.expect(body.status).to.equal('cancelled');
+            });
+
+            insomnia.environment.set('service_order_cancel_version',
+            body.version);
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 8. Error Cases (Negative Tests)
+    meta:
+      id: fld_afa1403bc87f4e4bb2c24a090313b53e
+      created: 1786711260855
+      modified: 1786771706300
+      sortKey: 7500
+      description: ""
+    children:
+      - name: 8.1 Tenant
+        meta:
+          id: fld_3931d45e906a4aaf856e712a36d2438e
+          created: 1786711260856
+          modified: 1786771701334
+          sortKey: 1000
+          description: ""
+        children:
+          - url: "{{ _.base_url }}/tenants"
+            name: Create Tenant - nama kosong -> 400
+            meta:
+              id: req_81921891e42b44c189bedfc739da4170
+              created: 1786711260858
+              modified: 1786711260858
+              isPrivate: false
+              description: ""
+              sortKey: 1000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "   "
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.test('400 Bad Request + pesan nama kosong', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                  insomnia.expect(body.error).to.include('kosong');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants/bukan-uuid"
+            name: Get Tenant - id bukan UUID -> 400
+            meta:
+              id: req_a5a2d9529e3245bc884c864c5d89ddc1
+              created: 1786711260860
+              modified: 1786711260860
+              isPrivate: false
+              description: ""
+              sortKey: 2000
+            method: GET
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (format id tidak valid)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants/{{_.uuid_404}}"
+            name: Get Tenant - id acak -> 404
+            meta:
+              id: req_1b46816eb4b94d979e052cccba01d566
+              created: 1786711260862
+              modified: 1786769630674
+              isPrivate: false
+              description: ""
+              sortKey: 3000
+            method: GET
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants/{{ _.tenant_id }}"
+            name: Rename Tenant - versi basi -> 409
+            meta:
+              id: req_ad8e69c7b8374da68fa4cd5f5f089c4b
+              created: 1786711260864
+              modified: 1786771397081
+              isPrivate: false
+              description: ""
+              sortKey: 4000
+            method: PATCH
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Nama Telat",
+                  "expected_version": {{ _.err_version }}
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.test('409 Conflict (version mismatch)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                  insomnia.expect(body.error).to.include('versi');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants"
+            name: List Tenants - updated_since invalid -> 400
+            meta:
+              id: req_10ebdd00a2ab4f1c9f8a972501efa4db
+              created: 1786711260865
+              modified: 1786711260865
+              isPrivate: false
+              description: ""
+              sortKey: 5000
+            method: GET
+            parameters:
+              - name: updated_since
+                value: bukan-tanggal
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.test('400 Bad Request (RFC 3339)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                  insomnia.expect(body.error).to.include('RFC 3339');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants/{{ _.tenant_id }}"
+            name: Delete Tenant - masih ada Business aktif -> 409
+            meta:
+              id: req_195e2f9c469b49f1aa5ece82553339b8
+              created: 1786711260867
+              modified: 1786711260867
+              isPrivate: false
+              description: ""
+              sortKey: 6000
+            method: DELETE
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "expected_version": {{ _.tenant_version }}
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('409 Conflict (masih ada business aktif)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+      - name: 8.2 Business
+        meta:
+          id: fld_c78d6e5f585a45b3befe23fd14fdadcf
+          created: 1786711260868
+          modified: 1786771702284
+          sortKey: 2000
+          description: ""
+        children:
+          - url: "{{ _.base_url }}/tenants/{{ _.tenant_id }}/businesses"
+            name: Create Business - nama duplikat di tenant sama -> 409
+            meta:
+              id: req_84332d22109b416c949abb7c77abe0a2
+              created: 1786711260870
+              modified: 1786711260870
+              isPrivate: false
+              description: ""
+              sortKey: 1000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Toko Baju Baru",
+                  "business_type": "retail"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.test('409 Conflict (nama business duplikat)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                  insomnia.expect(body.error).to.include('nama business');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants/{{ _.uuid_404 }}/businesses"
+            name: Create Business - tenant tidak ada -> 404
+            meta:
+              id: req_397b117cee4249828fa07746bbc2da20
+              created: 1786711260873
+              modified: 1786769769464
+              isPrivate: false
+              description: ""
+              sortKey: 2000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Business Hantu",
+                  "business_type": "retail"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (tenant tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}"
+            name: Rename Business - versi basi -> 409
+            meta:
+              id: req_75763ae15bb34d9cb1e274659ae0a0e9
+              created: 1786711260875
+              modified: 1786771423992
+              isPrivate: false
+              description: ""
+              sortKey: 3000
+            method: PATCH
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Nama Telat",
+                  "expected_version": {{ _.err_version }}
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('409 Conflict (version mismatch)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants/{{ _.uuid_404 }}/businesses"
+            name: List Businesses - tenant tidak ada -> 404
+            meta:
+              id: req_7a1e6941aec843c98df80a55e38e5a6d
+              created: 1786711260877
+              modified: 1786769797516
+              isPrivate: false
+              description: ""
+              sortKey: 4000
+            method: GET
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (tenant tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+      - name: 8.3 Customer
+        meta:
+          id: fld_13f40a72ce6c44e6b52e63ea35e1bbf7
+          created: 1786711260878
+          modified: 1786771703005
+          sortKey: 3000
+          description: ""
+        children:
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/customers"
+            name: Create Customer - nama kosong -> 400
+            meta:
+              id: req_da86d13c2fb049779092ffcdc8428261
+              created: 1786711260881
+              modified: 1786711260881
+              isPrivate: false
+              description: ""
+              sortKey: 1000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "   "
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.test('400 Bad Request (nama kosong)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                  insomnia.expect(body.error).to.include('kosong');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/customers"
+            name: Create Customer - phone invalid -> 400
+            meta:
+              id: req_5f4fe880804e4facbac8fd274000af22
+              created: 1786711260883
+              modified: 1786711260883
+              isPrivate: false
+              description: ""
+              sortKey: 2000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Customer Invalid Phone",
+                  "phone": "abc"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (phone invalid)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/customers"
+            name: Create Customer - business tidak ada -> 404
+            meta:
+              id: req_bcab2a5b712a4011b8281e6290e69124
+              created: 1786711260885
+              modified: 1786769927648
+              isPrivate: false
+              description: ""
+              sortKey: 3000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Customer Hantu"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/customers/{{ _.customer_id }}"
+            name: Rename Customer - versi basi -> 409
+            meta:
+              id: req_89569c68effc4781a42416bc268eef14
+              created: 1786711260886
+              modified: 1786771445614
+              isPrivate: false
+              description: ""
+              sortKey: 4000
+            method: PATCH
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Nama Telat",
+                  "expected_version": {{ _.err_version }}
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('409 Conflict (version mismatch)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/customers"
+            name: List Customers - business tidak ada -> 404
+            meta:
+              id: req_d6a409e588bb4267afc4ede072bbbd29
+              created: 1786711260887
+              modified: 1786769969101
+              isPrivate: false
+              description: ""
+              sortKey: 5000
+            method: GET
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+      - name: 8.4 Transaction
+        meta:
+          id: fld_b99aa4a7dddc4b97bfedb1b8892a595f
+          created: 1786711260889
+          modified: 1786771703813
+          sortKey: 4000
+          description: ""
+        children:
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/transactions"
+            name: Create Transaction - kind kosong -> 400
+            meta:
+              id: req_b939e8e749834d65aab408deef755d4a
+              created: 1786711260891
+              modified: 1786711260891
+              isPrivate: false
+              description: ""
+              sortKey: 1000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "kind": "   ",
+                  "amount": 10000
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (kind kosong)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/transactions"
+            name: Create Transaction - kind invalid -> 400
+            meta:
+              id: req_4cf7bcb91b624dba84a5d54ffa840507
+              created: 1786711260894
+              modified: 1786711260894
+              isPrivate: false
+              description: ""
+              sortKey: 2000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "kind": "sale online!",
+                  "amount": 10000
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (kind invalid)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/transactions"
+            name: Create Transaction - amount 0 -> 400
+            meta:
+              id: req_daa6d78ddce64c099086511d97e8461d
+              created: 1786711260897
+              modified: 1786711260897
+              isPrivate: false
+              description: ""
+              sortKey: 3000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "kind": "sale",
+                  "amount": 0
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: >-
+                const body = insomnia.response.json();
+
+                insomnia.test('400 Bad Request (amount harus > 0)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                  insomnia.expect(body.error).to.include('lebih besar dari nol');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/transactions"
+            name: Create Transaction - amount negatif -> 400
+            meta:
+              id: req_7c847ae43a6a49eb97e6a7a9fcf6a107
+              created: 1786711260899
+              modified: 1786711260899
+              isPrivate: false
+              description: ""
+              sortKey: 4000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "kind": "sale",
+                  "amount": -1
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (amount negatif)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/transactions"
+            name: Create Transaction - business tidak ada -> 404
+            meta:
+              id: req_6082055a6faf4af1aa0ee26e7cf65f8a
+              created: 1786711260900
+              modified: 1786770065879
+              isPrivate: false
+              description: ""
+              sortKey: 5000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "kind": "sale",
+                  "amount": 10000
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/transactions/{{ _.transaction_id }}"
+            name: Delete Transaction - versi basi -> 409
+            meta:
+              id: req_b62319bc51a54e88aaa8688a0d90ddc9
+              created: 1786711260902
+              modified: 1786771473934
+              isPrivate: false
+              description: ""
+              sortKey: 6000
+            method: DELETE
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "expected_version": {{ _.err_version }}
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('409 Conflict (version mismatch)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/transactions"
+            name: List Transactions - business tidak ada -> 404
+            meta:
+              id: req_4dc2c6ce02f246199cc83a91c49bb1ff
+              created: 1786711260904
+              modified: 1786770096424
+              isPrivate: false
+              description: ""
+              sortKey: 7000
+            method: GET
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+      - name: 8.5 Relationship
+        meta:
+          id: fld_acbb94288b3a4c4fa3bd7b7be639c802
+          created: 1786711260905
+          modified: 1786771704578
+          sortKey: 5000
+          description: ""
+        children:
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/relationships"
+            name: Create Relationship - self relationship -> 409
+            meta:
+              id: req_f3ea10f63e664bed86b0a1e8385bf8f2
+              created: 1786711260908
+              modified: 1786711260908
+              isPrivate: false
+              description: ""
+              sortKey: 1000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "from_customer_id": "{{ _.customer_id }}",
+                  "to_customer_id": "{{ _.customer_id }}",
+                  "relationship_type": "sibling"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.test('409 Conflict (self relationship)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                  insomnia.expect(body.error).to.include('dirinya sendiri');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/relationships"
+            name: Create Relationship - jenis kosong -> 400
+            meta:
+              id: req_32fe918f8ca8496e9c5231b207b57b64
+              created: 1786711260911
+              modified: 1786711260911
+              isPrivate: false
+              description: ""
+              sortKey: 2000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "from_customer_id": "{{ _.customer_id }}",
+                  "to_customer_id": "{{ _.customer_b_id }}",
+                  "relationship_type": "   "
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (jenis kosong)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/relationships"
+            name: Create Relationship - jenis invalid -> 400
+            meta:
+              id: req_4984183d44ab43149972b4d09d84ed5a
+              created: 1786711260913
+              modified: 1786711260913
+              isPrivate: false
+              description: ""
+              sortKey: 3000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "from_customer_id": "{{ _.customer_id }}",
+                  "to_customer_id": "{{ _.customer_b_id }}",
+                  "relationship_type": "family member!"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (jenis invalid)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/relationships"
+            name: Create Relationship - business tidak ada -> 404
+            meta:
+              id: req_6e32ed6b976642b29392277c713ec357
+              created: 1786711260914
+              modified: 1786770172681
+              isPrivate: false
+              description: ""
+              sortKey: 4000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "from_customer_id": "{{ _.customer_id }}",
+                  "to_customer_id": "{{ _.customer_b_id }}",
+                  "relationship_type": "sibling"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/relationships"
+            name: List Relationships - business tidak ada -> 404
+            meta:
+              id: req_1680887e391b42659f8a8b7e6679924f
+              created: 1786711260916
+              modified: 1786770184693
+              isPrivate: false
+              description: ""
+              sortKey: 5000
+            method: GET
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+      - name: 8.6 Interaction
+        meta:
+          id: fld_ff50fef556a04284b50efc4d05dd97bc
+          created: 1786711260917
+          modified: 1786771705092
+          sortKey: 6000
+          description: ""
+        children:
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/interactions"
+            name: Create Interaction - note kosong -> 400
+            meta:
+              id: req_9f129143504c43758a4e667120f6819b
+              created: 1786711260917
+              modified: 1786711260917
+              isPrivate: false
+              description: ""
+              sortKey: 1000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "customer_id": "{{ _.customer_id }}",
+                  "interaction_type": "call",
+                  "note": "   "
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (note kosong)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/interactions"
+            name: Create Interaction - jenis kosong -> 400
+            meta:
+              id: req_a7c543819d264569b57d471ebd64d71d
+              created: 1786711260918
+              modified: 1786711260918
+              isPrivate: false
+              description: ""
+              sortKey: 2000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "customer_id": "{{ _.customer_id }}",
+                  "interaction_type": "   "
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (jenis kosong)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/interactions"
+            name: Create Interaction - jenis invalid -> 400
+            meta:
+              id: req_1fcbd1bd02034e468a06fe52a4ed9bd9
+              created: 1786711260920
+              modified: 1786711260920
+              isPrivate: false
+              description: ""
+              sortKey: 3000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "customer_id": "{{ _.customer_id }}",
+                  "interaction_type": "phone call!"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('400 Bad Request (jenis invalid)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/interactions"
+            name: Create Interaction - business tidak ada -> 404
+            meta:
+              id: req_7d813a830f9c44299280b902172d88ec
+              created: 1786711260921
+              modified: 1786770273508
+              isPrivate: false
+              description: ""
+              sortKey: 4000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "customer_id": "{{ _.customer_id }}",
+                  "interaction_type": "call"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/interactions"
+            name: List Interactions - business tidak ada -> 404
+            meta:
+              id: req_e9a06894ebc64d7a949f62ac1a125c78
+              created: 1786711260922
+              modified: 1786770294184
+              isPrivate: false
+              description: ""
+              sortKey: 5000
+            method: GET
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+      - name: " 8.7 Workshop"
+        meta:
+          id: fld_e273990c1f6640f1a2406aa601311c45
+          created: 1786711260924
+          modified: 1786771706300
+          sortKey: 7000
+          description: ""
+        children:
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/service-orders"
+            name: 8.7.1 Create ServiceOrder - deskripsi kosong -> 400
+            meta:
+              id: req_c6a502854961426b8afc6f5eabdba043
+              created: 1786711260926
+              modified: 1786770500729
+              isPrivate: false
+              description: ""
+              sortKey: 1000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "customer_id": "{{ _.customer_id }}",
+                  "description": "   "
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.test('400 Bad Request (deskripsi kosong)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(400);
+                  insomnia.expect(body.error).to.include('kosong');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/service-orders"
+            name: 8.7.2 Create ServiceOrder - business tidak ada -> 404
+            meta:
+              id: req_7c051871182c487a932bca10c3b726d5
+              created: 1786711260928
+              modified: 1786770489198
+              isPrivate: false
+              description: ""
+              sortKey: 2000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "customer_id": "{{ _.customer_id }}",
+                  "description": "X"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.business_id }}/service-orders"
+            name: 8.7.3 Create ServiceOrder (baru, status Received) - untuk tes transisi
+              invalid
+            meta:
+              id: req_31d6056e6ea249b697ff3517b36deef4
+              created: 1786711260929
+              modified: 1786770472722
+              isPrivate: false
+              description: ""
+              sortKey: 3000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "customer_id": "{{ _.customer_id }}",
+                  "description": "Servis untuk tes transisi invalid"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: >-
+                const body = insomnia.response.json();
+
+                insomnia.test('Create ServiceOrder -> 201 Created', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(201);
+                });
+
+                insomnia.environment.set('service_order_err_id', body.id);
+
+                insomnia.environment.set('service_order_err_version',
+                body.version);
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/service-orders/{{ _.service_order_err_id }}/complete"
+            name: 8.7.4 Complete ServiceOrder - langsung dari Received (belum Start) -> 409
+            meta:
+              id: req_ec89282ae8a94f0696305b9a85290f4b
+              created: 1786711260931
+              modified: 1786770550810
+              isPrivate: false
+              description: ""
+              sortKey: 4000
+            method: PATCH
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "expected_version": {{ _.service_order_err_version }}
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: >-
+                const body = insomnia.response.json();
+
+                insomnia.test('409 Conflict (transisi status tidak valid)', ()
+                => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                  insomnia.expect(body.error).to.include('tidak bisa mengubah status');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/service-orders/{{ _.service_order_err_id }}/start"
+            name: 8.7.5 Start ServiceOrder - versi basi -> 409
+            meta:
+              id: req_91aa8981aefe46d1a5ad1993754eada0
+              created: 1786711260933
+              modified: 1786770754182
+              isPrivate: false
+              description: ""
+              sortKey: 5000
+            method: PATCH
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "expected_version": {{_.err_version}}
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                insomnia.test('409 Conflict (version mismatch)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(409);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants"
+            name: 8.7.6 Setup - Create Tenant Lain (untuk tes cross-business)
+            meta:
+              id: req_c1028fabc05c4d59adb5d88c087ddd0a
+              created: 1786711260934
+              modified: 1786770792009
+              isPrivate: false
+              description: ""
+              sortKey: 6000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Tenant Bengkel Lain"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.environment.set('other_tenant_id', body.id);
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/tenants/{{ _.other_tenant_id }}/businesses"
+            name: 8.7.7 Setup - Create Business Lain (untuk tes cross-business)
+            meta:
+              id: req_a78c45d3153e46d2a815d20548a1867f
+              created: 1786711260936
+              modified: 1786770827411
+              isPrivate: false
+              description: ""
+              sortKey: 6500
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "name": "Bengkel Lain",
+                  "business_type": "workshop"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.environment.set('other_business_id', body.id);
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.other_business_id }}/transactions"
+            name: 8.7.8 Setup - Create Transaction milik Business Lain
+            meta:
+              id: req_1fc9c80bf9c7485b8aa4226e946fb617
+              created: 1786711260938
+              modified: 1786770874217
+              isPrivate: false
+              description: ""
+              sortKey: 7000
+            method: POST
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "kind": "service",
+                  "amount": 75000
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: |-
+                const body = insomnia.response.json();
+                insomnia.environment.set('other_transaction_id', body.id);
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/service-orders/{{ _.service_order_err_id }}/complete"
+            name: 8.7.9 Complete ServiceOrder - transaction_id milik Business lain -> 404
+            meta:
+              id: req_1b2fb78f1bd54077ad2f74ffa83c3006
+              created: 1786711260939
+              modified: 1786770926182
+              isPrivate: false
+              description: ""
+              sortKey: 7500
+            method: PATCH
+            body:
+              mimeType: application/json
+              text: |-
+                {
+                  "expected_version": {{ _.service_order_err_version }},
+                  "transaction_id": "{{ _.other_transaction_id }}"
+                }
+            headers:
+              - name: Content-Type
+                value: application/json
+            scripts:
+              afterResponse: >-
+                const body = insomnia.response.json();
+
+                insomnia.test('404 Not Found (transaction bukan milik business
+                ini, info-hiding)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                  insomnia.expect(body.error).to.include('transaction tidak ditemukan');
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: "{{ _.base_url }}/businesses/{{ _.uuid_404 }}/service-orders"
+            name: 8.7.10 List ServiceOrders - business tidak ada -> 404
+            meta:
+              id: req_0dda7910d8b047efb36dc13ab876a821
+              created: 1786711260943
+              modified: 1786771042923
+              isPrivate: false
+              description: ""
+              sortKey: 8000
+            method: GET
+            scripts:
+              afterResponse: |-
+                insomnia.test('404 Not Found (business tidak ada)', () => {
+                  insomnia.expect(insomnia.response.code).to.equal(404);
+                });
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+  - name: 9. Cleanup (Delete semua, urut)
+    meta:
+      id: fld_f725e235899b420ba878d618d57726c9
+      created: 1786711260945
+      modified: 1786771708087
+      sortKey: 8000
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/service-orders/{{ _.service_order_id }}"
+        name: 9.1 Delete ServiceOrder (utama)
+        meta:
+          id: req_7dcdc33f8c9349d68f4a8a67fa282de2
+          created: 1786711260946
+          modified: 1786712673991
+          isPrivate: false
+          description: ""
+          sortKey: 1000
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.service_order_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            insomnia.test('Delete ServiceOrder -> 204 No Content', () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/service-orders/{{ _.service_order_cancel_id }}"
+        name: 9.2 Delete ServiceOrder (cancel demo)
+        meta:
+          id: req_8a09828b14de43c2876996489c676023
+          created: 1786711260949
+          modified: 1786712683196
+          isPrivate: false
+          description: ""
+          sortKey: 1500
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.service_order_cancel_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: >-
+            insomnia.test('Delete ServiceOrder (cancel demo) -> 204 No Content',
+            () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/interactions/{{ _.interaction_id }}"
+        name: 9.3 Delete Interaction
+        meta:
+          id: req_f9f2f585e327431e805c78b4b1506a1c
+          created: 1786711260951
+          modified: 1786712692253
+          isPrivate: false
+          description: ""
+          sortKey: 2000
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.interaction_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            insomnia.test('Delete Interaction -> 204 No Content', () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/relationships/{{ _.relationship_id }}"
+        name: 9.4 Delete Relationship
+        meta:
+          id: req_8dd0ee4b77764a7a86e006f985eb7223
+          created: 1786711260953
+          modified: 1786712707263
+          isPrivate: false
+          description: ""
+          sortKey: 3000
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.relationship_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            insomnia.test('Delete Relationship -> 204 No Content', () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/transactions/{{ _.transaction_id }}"
+        name: 9.5 Delete Transaction
+        meta:
+          id: req_c45376b9b42d4b2cadc917d802daf6e2
+          created: 1786711260956
+          modified: 1786712719847
+          isPrivate: false
+          description: ""
+          sortKey: 4000
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.transaction_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            insomnia.test('Delete Transaction -> 204 No Content', () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/customers/{{ _.customer_b_id }}"
+        name: 9.6 Delete Customer B
+        meta:
+          id: req_bdf61885058b4d18966761536c583b09
+          created: 1786711260958
+          modified: 1786712732964
+          isPrivate: false
+          description: ""
+          sortKey: 5000
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.customer_b_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            insomnia.test('Delete Customer B -> 204 No Content', () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/customers/{{ _.customer_id }}"
+        name: 9.7 Delete Customer
+        meta:
+          id: req_00c98275097f4c359679db85a6a9a37e
+          created: 1786711260960
+          modified: 1786712740394
+          isPrivate: false
+          description: ""
+          sortKey: 6000
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.customer_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            insomnia.test('Delete Customer -> 204 No Content', () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/businesses/{{ _.business_id }}"
+        name: 9.8 Delete Business
+        meta:
+          id: req_f145097397bb47fbb7004f7fd770e0e1
+          created: 1786711260963
+          modified: 1786712750778
+          isPrivate: false
+          description: ""
+          sortKey: 7000
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.business_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            insomnia.test('Delete Business -> 204 No Content', () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/tenants/{{ _.tenant_id }}"
+        name: 9.9 Delete Tenant
+        meta:
+          id: req_59969ea46c2b4d7e9c41739dd43b064c
+          created: 1786711260966
+          modified: 1786712760724
+          isPrivate: false
+          description: ""
+          sortKey: 8000
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "expected_version": {{ _.tenant_version }}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        scripts:
+          afterResponse: |-
+            insomnia.test('Delete Tenant -> 204 No Content', () => {
+              insomnia.expect(insomnia.response.code).to.equal(204);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_0b1ef9224ce2fb27905395dfea676f6b219b1f83
+    created: 1786711261310
+    modified: 1786771708083
+environments:
+  name: Base Environment
+  meta:
+    id: env_5ee6945bb66c4aa7bfdcd901f78cc59d
+    created: 1786711260788
+    modified: 1786771708085
+    isPrivate: false
+  data:
+    base_url: http://localhost:3000
+    tenant_id: 01a003e4-5d4f-7201-a352-997d02734825
+    tenant_version: 1
+    business_version: 1
+    business_id: 01a003e4-6581-7ad3-b04c-cd840ac9c32b
+    customer_version: 3
+    customer_id: 01a003e4-6a73-7a73-8034-6dd835d5e881
+    customer_b_id: 01a003e4-6baa-7c10-9b16-762e289940df
+    service_order_version: 2
+    service_order_id: 01a003e4-7513-7b83-b1db-b105b6181aa5
+    transaction_id: 01a003e4-705d-7dc3-8501-24741b756602
+    service_order_cancel_id: 01a003e4-7840-7120-b14a-3789ca76a0a5
+    service_order_cancel_version: 1
+    service_order_err_version: 0
+    service_order_err_id: 01a003e4-8ecc-7593-9d3e-989e4838dc73
+    other_tenant_id: 01a003e4-8f9e-7483-9259-3f80d5667153
+    other_business_id: 01a003e4-8fdf-7c02-bc89-36e036a281b8
+    other_transaction_id: 01a003e4-909e-7ad2-8f85-56b04046f245
+    interaction_version: 0
+    interaction_id: 01a003e4-73e7-7de3-9a71-bb0dc3077bdc
+    relationship_version: 0
+    relationship_id: 01a003e4-726f-70e0-b3fe-39e5c52123bc
+    transaction_version: 0
+    customer_b_version: 0
+    uuid_404: 00000000-0000-0000-0000-000000000000
+    err_version: "999"
+    "": ""
