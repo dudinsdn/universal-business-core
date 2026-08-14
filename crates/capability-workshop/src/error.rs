@@ -51,6 +51,13 @@ pub enum WorkshopError {
     /// bisa membedakan "customer_id salah" dari "customer_id itu milik
     /// business/tenant lain" (info-hiding, lihat diskusi desain gap #3).
     CustomerNotFound,
+    /// ServiceOrder tidak boleh di-`complete()` dengan `transaction_id`
+    /// yang bukan milik Business yang sama (pola identik dengan
+    /// `CustomerNotFound` di atas, menutup celah yang sama untuk
+    /// `transaction_id`). SENGAJA dipetakan ke pesan/status yang SAMA
+    /// seperti "tidak ditemukan" (404, bukan 409) untuk alasan info-hiding
+    /// yang sama.
+    TransactionNotFound,
 }
 
 impl fmt::Display for WorkshopError {
@@ -76,6 +83,7 @@ impl fmt::Display for WorkshopError {
                 write!(f, "status service order tidak dikenal: {value}")
             }
             WorkshopError::CustomerNotFound => write!(f, "customer tidak ditemukan"),
+            WorkshopError::TransactionNotFound => write!(f, "transaction tidak ditemukan"),
         }
     }
 }

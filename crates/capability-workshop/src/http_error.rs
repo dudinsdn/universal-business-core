@@ -138,6 +138,9 @@ impl IntoResponse for WorkshopApiError {
                         // di Core: 404, bukan 409 — lihat komentar di
                         // WorkshopError::CustomerNotFound.
                         WorkshopError::CustomerNotFound => StatusCode::NOT_FOUND,
+                        // Pola identik dengan CustomerNotFound di atas —
+                        // lihat komentar di WorkshopError::TransactionNotFound.
+                        WorkshopError::TransactionNotFound => StatusCode::NOT_FOUND,
                     },
                     ServiceOrderError::ServiceOrderNotFound => StatusCode::NOT_FOUND,
                     ServiceOrderError::Repository(_) => StatusCode::INTERNAL_SERVER_ERROR,

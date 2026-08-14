@@ -127,7 +127,33 @@ check "PATCH cancel dari 'received' -> 200" 200 "$STATUS"
 check_json_field "status" "cancelled" "status berubah jadi 'cancelled'"
 
 echo
-echo "=== 3. SOFT DELETE & SYNC ==="
+echo "=== 3. CROSS-BUSINESS TRANSACTION DITOLAK ==="
+
+# Bengkel lain (tenant terpisah) dengan transaction sendiri.
+STATUS=$(req POST /tenants '{"name":"Tenant Bengkel Lain"}')
+OTHER_TENANT_ID=$(json_value id)
+
+STATUS=$(req POST "/tenants/$OTHER_TENANT_ID/businesses" \
+  '{"name":"Bengkel Lain","business_type":"workshop"}')
+OTHER_BUSINESS_ID=$(json_value id)
+
+STATUS=$(req POST "/businesses/$OTHER_BUSINESS_ID/transactions" \
+  '{"kind":"service","amount":75000}')
+OTHER_TRANSACTION_ID=$(json_value id)
+
+STATUS=$(req POST "/businesses/$BUSINESS_ID/service-orders" \
+  '{"customer_id":"'"$CUSTOMER_ID"'","description":"Servis dengan transaction asing"}')
+FOREIGN_TX_TARGET_ID=$(json_value id)
+
+req PATCH "/service-orders/$FOREIGN_TX_TARGET_ID/start" '{"expected_version":0}' >/dev/null
+
+STATUS=$(req PATCH "/service-orders/$FOREIGN_TX_TARGET_ID/complete" \
+  '{"expected_version":1,"transaction_id":"'"$OTHER_TRANSACTION_ID"'"}')
+check "PATCH complete dengan transaction_id business lain -> 404" 404 "$STATUS"
+check_contains "error" "pesan error transaction tidak ditemukan (info-hiding)"
+
+echo
+echo "=== 4. SOFT DELETE & SYNC ==="
 
 STATUS=$(req GET "/businesses/$BUSINESS_ID/service-orders")
 check "GET service-orders full sync" 200 "$STATUS"
@@ -162,7 +188,7 @@ assert_yes "$(deleted_id_is_true "$SYNC_TARGET_ID")" \
   "service order soft-deleted tetap muncul dengan is_deleted=true"
 
 echo
-echo "=== 4. BUSINESS DIHAPUS -> CREATE SERVICE ORDER DITOLAK ==="
+echo "=== 5. BUSINESS DIHAPUS -> CREATE SERVICE ORDER DITOLAK ==="
 
 # Selesaikan/hapus dulu semua entity aktif di bawah business supaya boleh
 # dihapus — pola sama seperti smoke_test.sh bagian 14.

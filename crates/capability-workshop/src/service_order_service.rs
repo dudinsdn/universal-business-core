@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use domain::{Business, BusinessId, Customer, TransactionId, rules as domain_rules};
+use domain::{Business, BusinessId, Customer, Transaction, rules as domain_rules};
 
 use crate::error::{ServiceOrderError, WorkshopError};
 use crate::repository::ServiceOrderRepository;
@@ -101,11 +101,21 @@ impl<R: ServiceOrderRepository> ServiceOrderService<R> {
 
     /// InProgress -> Completed, dengan referensi opsional ke Transaction
     /// (Core) yang menagihnya.
+    ///
+    /// `transaction` diterima sebagai `Option<&Transaction>` (BUKAN
+    /// `Option<TransactionId>` mentah) — pemanggil (route) WAJIB
+    /// mengambilnya lebih dulu lewat
+    /// `application::TransactionService::get_transaction`, supaya
+    /// validasi `rules::transaction_belongs_to_business` bisa dilakukan
+    /// di sini SEBELUM ServiceOrder ditautkan. Pola sama persis seperti
+    /// validasi `customer` di `create_service_order` — menutup celah:
+    /// sebelumnya client bisa mengirim `transaction_id` milik
+    /// Business/Tenant lain dan tetap diterima begitu saja.
     pub async fn complete_service_order(
         &self,
         id: ServiceOrderId,
         expected_version: u32,
-        transaction_id: Option<TransactionId>,
+        transaction: Option<&Transaction>,
     ) -> Result<ServiceOrder, ServiceOrderError> {
         let mut order = self
             .repository
@@ -114,7 +124,20 @@ impl<R: ServiceOrderRepository> ServiceOrderService<R> {
             .ok_or(ServiceOrderError::ServiceOrderNotFound)?;
 
         rules::ensure_version_matches(expected_version, order.version())?;
-        order.complete(transaction_id)?;
+
+        if let Some(transaction) = transaction {
+            // Info-hiding sengaja — lihat komentar di
+            // `WorkshopError::TransactionNotFound` dan pola yang sama di
+            // `create_service_order`/Core (`TransactionService::create_transaction`).
+            if !rules::transaction_belongs_to_business(
+                transaction.business_id(),
+                order.business_id(),
+            ) {
+                return Err(WorkshopError::TransactionNotFound.into());
+            }
+        }
+
+        order.complete(transaction.map(|t| t.id()))?;
         self.repository.save(&order).await?;
         Ok(order)
     }
@@ -177,6 +200,16 @@ mod tests {
 
     fn sample_customer(business: &Business) -> Customer {
         Customer::new(business.id(), CustomerName::new("Budi").unwrap(), None)
+    }
+
+    fn sample_transaction(business: &Business) -> Transaction {
+        Transaction::new(
+            business.id(),
+            None,
+            domain::TransactionKind::new("service").unwrap(),
+            domain::TransactionAmount::new(150_000).unwrap(),
+            Utc::now(),
+        )
     }
 
     async fn create_test_order(
@@ -344,13 +377,42 @@ mod tests {
             .await
             .unwrap();
 
-        let transaction_id = TransactionId::new();
+        let transaction = sample_transaction(&business);
         let completed = service
-            .complete_service_order(order.id(), started.version(), Some(transaction_id))
+            .complete_service_order(order.id(), started.version(), Some(&transaction))
             .await
             .unwrap();
 
-        assert_eq!(completed.transaction_id(), Some(transaction_id));
+        assert_eq!(completed.transaction_id(), Some(transaction.id()));
+    }
+
+    #[tokio::test]
+    async fn complete_service_order_rejects_transaction_from_another_business() {
+        let repo = InMemoryServiceOrderRepository::new();
+        let service = ServiceOrderService::new(repo);
+        let business = active_business();
+        let other_business = active_business();
+        let customer = sample_customer(&business);
+        let order = create_test_order(&service, &business, &customer).await;
+
+        let started = service
+            .start_service_order(order.id(), order.version())
+            .await
+            .unwrap();
+
+        // Transaction ini sengaja milik Business LAIN — mensimulasikan
+        // client mengirim transaction_id yang bukan miliknya.
+        let foreign_transaction = sample_transaction(&other_business);
+        let result = service
+            .complete_service_order(order.id(), started.version(), Some(&foreign_transaction))
+            .await;
+
+        assert_eq!(
+            result,
+            Err(ServiceOrderError::Workshop(
+                WorkshopError::TransactionNotFound
+            ))
+        );
     }
 
     #[tokio::test]

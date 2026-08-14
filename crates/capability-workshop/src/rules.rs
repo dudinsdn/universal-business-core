@@ -4,6 +4,8 @@
 //! Pola sama persis seperti `domain::rules` di Core: fungsi murni, tidak
 //! ada akses database, bisa di-unit-test tanpa infrastruktur apa pun.
 
+use domain::BusinessId;
+
 use crate::error::WorkshopError;
 
 /// Business rule: ServiceOrder hanya boleh dibuat di bawah Business yang
@@ -29,6 +31,20 @@ pub fn ensure_version_matches(expected: u32, actual: u32) -> Result<(), Workshop
         return Err(WorkshopError::VersionConflict);
     }
     Ok(())
+}
+
+/// Business rule: ServiceOrder hanya boleh di-`complete()` dengan
+/// `transaction_id` yang benar-benar milik Business yang sama.
+///
+/// Pola sama persis seperti `domain::rules::customer_belongs_to_business`
+/// — predikat murni, keputusan mau dipetakan ke error APA
+/// (`WorkshopError::TransactionNotFound`, demi info-hiding) ada di
+/// pemanggil (`ServiceOrderService`), bukan di sini.
+pub fn transaction_belongs_to_business(
+    transaction_business_id: BusinessId,
+    business_id: BusinessId,
+) -> bool {
+    transaction_business_id == business_id
 }
 
 #[cfg(test)]
@@ -59,5 +75,19 @@ mod tests {
     #[test]
     fn allows_update_when_version_matches() {
         assert_eq!(ensure_version_matches(2, 2), Ok(()));
+    }
+
+    #[test]
+    fn transaction_belongs_to_business_true_when_same_business() {
+        let business_id = BusinessId::new();
+        assert!(transaction_belongs_to_business(business_id, business_id));
+    }
+
+    #[test]
+    fn transaction_belongs_to_business_false_when_different_business() {
+        assert!(!transaction_belongs_to_business(
+            BusinessId::new(),
+            BusinessId::new()
+        ));
     }
 }

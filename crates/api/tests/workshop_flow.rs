@@ -9,19 +9,23 @@ use api::{AppState, build_router};
 use capability_workshop::{InMemoryServiceOrderRepository, WorkshopState, build_workshop_router};
 
 /// Menggabungkan Core router + Workshop router — pola sama seperti
-/// `main.rs`. `business_service`/`customer_service` disalin dari
-/// `core_state` SEBELUM `build_router` memindahnya, supaya Workshop
-/// memakai instance `BusinessRepository`/`CustomerRepository` YANG SAMA
-/// dengan Core (bukan repository in-memory terpisah yang datanya beda).
+/// `main.rs`. `business_service`/`customer_service`/`transaction_service`
+/// disalin dari `core_state` SEBELUM `build_router` memindahnya, supaya
+/// Workshop memakai instance
+/// `BusinessRepository`/`CustomerRepository`/`TransactionRepository`
+/// YANG SAMA dengan Core (bukan repository in-memory terpisah yang
+/// datanya beda).
 fn app() -> Router {
     let core_state = AppState::new_in_memory();
     let business_service_for_workshop = core_state.business_service.clone();
     let customer_service_for_workshop = core_state.customer_service.clone();
+    let transaction_service_for_workshop = core_state.transaction_service.clone();
     let core_router = build_router(core_state);
 
     let workshop_state = WorkshopState::new(
         business_service_for_workshop,
         customer_service_for_workshop,
+        transaction_service_for_workshop,
         InMemoryServiceOrderRepository::new(),
     );
     let workshop_router = build_workshop_router(workshop_state);
@@ -188,6 +192,64 @@ async fn complete_service_order_can_link_a_transaction() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(completed["transaction_id"], transaction_id);
+}
+
+#[tokio::test]
+async fn complete_service_order_rejects_transaction_from_another_business() {
+    let app = app();
+    let (business_id, customer_id) = setup_business_with_customer(&app).await;
+
+    // Transaction ini sengaja dibuat di bawah Business LAIN — mensimulasikan
+    // client mengirim transaction_id yang bukan miliknya.
+    let (other_business_id, _) = setup_business_with_customer(&app).await;
+    let (_, foreign_transaction) = send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/businesses/{other_business_id}/transactions"),
+            json!({ "kind": "service", "amount": 150000 }),
+        ),
+    )
+    .await;
+    let foreign_transaction_id = foreign_transaction["id"].as_str().unwrap().to_string();
+
+    let (_, order) = send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/businesses/{business_id}/service-orders"),
+            json!({ "customer_id": customer_id, "description": "Ganti kampas rem" }),
+        ),
+    )
+    .await;
+    let order_id = order["id"].as_str().unwrap().to_string();
+
+    send(
+        &app,
+        json_request(
+            "PATCH",
+            &format!("/service-orders/{order_id}/start"),
+            json!({ "expected_version": 0 }),
+        ),
+    )
+    .await;
+
+    let (status, err) = send(
+        &app,
+        json_request(
+            "PATCH",
+            &format!("/service-orders/{order_id}/complete"),
+            json!({ "expected_version": 1, "transaction_id": foreign_transaction_id }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(
+        err["error"]
+            .as_str()
+            .unwrap()
+            .contains("transaction tidak ditemukan")
+    );
 }
 
 #[tokio::test]

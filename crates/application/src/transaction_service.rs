@@ -77,6 +77,21 @@ impl<R: TransactionRepository> TransactionService<R> {
         Ok((transaction, true))
     }
 
+    /// Mengambil satu Transaction berdasarkan id. Dibutuhkan pemanggil (mis.
+    /// Capability Workshop) yang perlu objek `Transaction` utuh sebelum
+    /// menautkannya ke entity lain, supaya bisa divalidasi benar-benar
+    /// milik `Business` yang sama sebelum ditautkan. Pola sama seperti
+    /// `BusinessService::get_business`/`CustomerService::get_customer`.
+    pub async fn get_transaction(
+        &self,
+        id: TransactionId,
+    ) -> Result<Transaction, ApplicationError> {
+        self.repository
+            .find_by_id(id)
+            .await?
+            .ok_or(ApplicationError::TransactionNotFound)
+    }
+
     /// Semua Transaction di bawah satu Business yang berubah sejak `since`
     /// — dipakai endpoint incremental sync nanti (belum dibuat di tahap
     /// ini).
@@ -274,6 +289,28 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(ApplicationError::CustomerNotFound)));
+    }
+
+    #[tokio::test]
+    async fn get_transaction_returns_saved_transaction() {
+        let repo = InMemoryTransactionRepository::new();
+        let service = TransactionService::new(repo);
+        let business = active_business();
+        let created = create_test_transaction(&service, &business).await;
+
+        let fetched = service.get_transaction(created.id()).await.unwrap();
+
+        assert_eq!(fetched.id(), created.id());
+    }
+
+    #[tokio::test]
+    async fn get_transaction_fails_when_not_found() {
+        let repo = InMemoryTransactionRepository::new();
+        let service = TransactionService::new(repo);
+
+        let result = service.get_transaction(TransactionId::new()).await;
+
+        assert!(matches!(result, Err(ApplicationError::TransactionNotFound)));
     }
 
     #[tokio::test]
