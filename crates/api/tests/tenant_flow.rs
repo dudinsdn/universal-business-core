@@ -41,7 +41,7 @@ fn get_request(uri: &str) -> Request<Body> {
 }
 
 #[tokio::test]
-async fn full_flow_create_rename_delete() {
+async fn full_flow_create_delete() {
     let app = app();
 
     // Buat tenant.
@@ -128,6 +128,94 @@ async fn get_tenant_returns_404_when_not_found() {
 }
 
 #[tokio::test]
+async fn rename_tenant_updates_name_and_version() {
+    let app = app();
+
+    let (_, tenant) = send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant A" })),
+    )
+    .await;
+    let tenant_id = tenant["id"].as_str().unwrap().to_string();
+    assert_eq!(tenant["version"], 0);
+
+    let (status, renamed) = send(
+        &app,
+        json_request(
+            "PATCH",
+            &format!("/tenants/{tenant_id}"),
+            json!({
+                "name": "Tenant B",
+                "expected_version": 0
+            }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(renamed["id"], tenant["id"]);
+    assert_eq!(renamed["name"], "Tenant B");
+    assert_eq!(renamed["version"], 1);
+    assert_eq!(renamed["is_deleted"], false);
+}
+
+#[tokio::test]
+async fn rename_tenant_returns_404_when_not_found() {
+    let app = app();
+    let random_id = domain::TenantId::new().to_string();
+
+    let (status, _) = send(
+        &app,
+        json_request(
+            "PATCH",
+            &format!("/tenants/{random_id}"),
+            json!({
+                "name": "Tenant Baru",
+                "expected_version": 0
+            }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn rename_tenant_rejects_stale_version() {
+    let app = app();
+
+    let (_, tenant) = send(
+        &app,
+        json_request("POST", "/tenants", json!({ "name": "Tenant A" })),
+    )
+    .await;
+    let tenant_id = tenant["id"].as_str().unwrap().to_string();
+
+    let (status, _) = send(
+        &app,
+        json_request(
+            "PATCH",
+            &format!("/tenants/{tenant_id}"),
+            json!({
+                "name": "Tenant B",
+                "expected_version": 1
+            }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Tenant tetap menggunakan data dan version sebelumnya.
+    let (status, fetched) = send(&app, get_request(&format!("/tenants/{tenant_id}"))).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(fetched["name"], "Tenant A");
+    assert_eq!(fetched["version"], 0);
+    assert_eq!(fetched["is_deleted"], false);
+}
+
+#[tokio::test]
 async fn delete_tenant_rejects_stale_version() {
     let app = app();
 
@@ -169,6 +257,24 @@ async fn create_tenant_rejects_empty_name() {
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(err["error"].as_str().unwrap().contains("kosong"));
+}
+
+#[tokio::test]
+async fn delete_tenant_returns_404_when_not_found() {
+    let app = app();
+    let random_id = domain::TenantId::new().to_string();
+
+    let (status, _) = send(
+        &app,
+        json_request(
+            "DELETE",
+            &format!("/tenants/{random_id}"),
+            json!({ "expected_version": 0 }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
