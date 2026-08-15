@@ -42,6 +42,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "domain",
+ "thiserror",
  "tokio",
 ]
 
@@ -183,6 +184,7 @@ dependencies = [
  "http-body-util",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tower",
  "uuid",
