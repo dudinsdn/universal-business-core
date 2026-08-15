@@ -1,0 +1,4523 @@
+{
+  "info": {
+    "_postman_id": "89025f1a-eec2-4fea-88fd-cc95564b07e4",
+    "name": "Universal Business Core",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "56578228",
+    "_collection_link": "https://go.postman.co/collection/56578228-89025f1a-eec2-4fea-88fd-cc95564b07e4?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "1. Tenant",
+      "item": [
+        {
+          "name": "1.1 Create Tenant",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create Tenant -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('tenant_id', body.id);",
+                  "    pm.environment.set('tenant_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tenant A\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "1.2 Get Tenant",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Get Tenant -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "1.3 List Tenants (incremental sync)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('List Tenants -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tenants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants"
+              ],
+              "query": [
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "description": "RFC 3339, contoh 2026-08-01T00:00:00Z",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "1.4 Rename Tenant",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Rename Tenant -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "    pm.environment.set('tenant_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"name\": \"Tenant A Baru\",\n\t\"expected_version\": {{tenant_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Business",
+      "item": [
+        {
+          "name": "2.1 Create Business",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create Business -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('business_id', body.id);",
+                  "    pm.environment.set('business_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Toko Baju\",\n  \"business_type\": \"retail\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}/businesses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}",
+                "businesses"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 List Businesses by Tenant (incremental sync)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('List Businesses -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}/businesses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}",
+                "businesses"
+              ],
+              "query": [
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 Rename Business",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Rename Business -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "    pm.environment.set('business_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Toko Baju Baru\",\n  \"expected_version\": {{business_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Customer",
+      "item": [
+        {
+          "name": "3.1 Create Customer (Budi)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create Customer -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('customer_id', body.id);",
+                  "    pm.environment.set('customer_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Budi Santoso\",\n  \"phone\": \"081234567890\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "customers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 Create Customer B (Ani, untuk Relationship)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create Customer B -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('customer_b_id', body.id);",
+                  "    pm.environment.set('customer_b_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ani Wijaya\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "customers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 List Customers by Business (incremental sync)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('List Customers -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3.4 Rename Customer",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Rename Customer -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "    pm.environment.set('customer_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Budi Santoso Baru\",\n  \"expected_version\": {{customer_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/customers/{{customer_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "customers",
+                "{{customer_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3.5 Update Customer Phone",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Update Customer Phone -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "    pm.environment.set('customer_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"089999999999\",\n  \"expected_version\": {{customer_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/customers/{{customer_id}}/phone",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "customers",
+                "{{customer_id}}",
+                "phone"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3.6 Clear Customer Phone",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Clear Customer Phone -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "    pm.environment.set('customer_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": null,\n  \"expected_version\": {{customer_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/customers/{{customer_id}}/phone",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "customers",
+                "{{customer_id}}",
+                "phone"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Transaction",
+      "item": [
+        {
+          "name": "4.1 Create Transaction",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create Transaction -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('transaction_id', body.id);",
+                  "    pm.environment.set('transaction_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"kind\": \"sale\",\n  \"amount\": 50000,\n  \"occurred_at\": \"2026-08-08T00:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/transactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "transactions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4.2 List Transactions by Business (incremental sync)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('List Transactions -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/transactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Relationship",
+      "item": [
+        {
+          "name": "5.1 Create Relationship",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create Relationship -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('relationship_id', body.id);",
+                  "    pm.environment.set('relationship_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_customer_id\": \"{{customer_id}}\",\n  \"to_customer_id\": \"{{customer_b_id}}\",\n  \"relationship_type\": \"sibling\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/relationships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "relationships"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5.2 List Relationships by Business (incremental sync)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('List Relationships -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/relationships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "relationships"
+              ],
+              "query": [
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Interaction",
+      "item": [
+        {
+          "name": "6.1 Create Interaction",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create Interaction -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('interaction_id', body.id);",
+                  "    pm.environment.set('interaction_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"interaction_type\": \"call\",\n  \"note\": \"Follow up jadwal kontrol\",\n  \"occurred_at\": \"2026-08-08T02:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/interactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "interactions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6.2 List Interactions by Business (incremental sync)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('List Interactions -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/interactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "interactions"
+              ],
+              "query": [
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Workshop - ServiceOrder",
+      "item": [
+        {
+          "name": "7.1 Create ServiceOrder",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create ServiceOrder -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('service_order_id', body.id);",
+                  "    pm.environment.set('service_order_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"description\": \"Ganti oli dan servis rem\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/service-orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "service-orders"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7.2 List ServiceOrders by Business (incremental sync)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('List ServiceOrders -> 200 OK', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/service-orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "service-orders"
+              ],
+              "query": [
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7.3 Start ServiceOrder",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Start ServiceOrder -> 200 OK, status in_progress', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "        pm.expect(body.status).to.equal('in_progress');",
+                  "    });",
+                  "    pm.environment.set('service_order_version', body.version);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{service_order_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/service-orders/{{service_order_id}}/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{service_order_id}}",
+                "start"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7.4 Complete ServiceOrder (link Transaction)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Complete ServiceOrder -> 200 OK, status completed', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "        pm.expect(body.status).to.equal('completed');",
+                  "    });",
+                  "    pm.environment.set('service_order_version', body.version);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{service_order_version}},\n  \"transaction_id\": \"{{transaction_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/service-orders/{{service_order_id}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{service_order_id}}",
+                "complete"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7.5 Create ServiceOrder (untuk demo Cancel)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Create ServiceOrder (cancel demo) -> 201 Created', () => {",
+                  "        pm.expect(pm.response.code).to.equal(201);",
+                  "    });",
+                  "    pm.environment.set('service_order_cancel_id', body.id);",
+                  "    pm.environment.set('service_order_cancel_version', body.version);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"description\": \"Servis yang akan dibatalkan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}/service-orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}",
+                "service-orders"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7.6 Cancel ServiceOrder",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Cancel ServiceOrder -> 200 OK, status cancelled', () => {",
+                  "        pm.expect(pm.response.code).to.equal(200);",
+                  "        pm.expect(body.status).to.equal('cancelled');",
+                  "    });",
+                  "    pm.environment.set('service_order_cancel_version', body.version);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{service_order_cancel_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/service-orders/{{service_order_cancel_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{service_order_cancel_id}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. Error Cases (Negative Tests)",
+      "item": [
+        {
+          "name": "8.1 Tenant",
+          "item": [
+            {
+              "name": "Create Tenant - nama kosong -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('400 Bad Request + pesan nama kosong', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "        pm.expect(body.error).to.include('kosong');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"   \"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/tenants",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Tenant - id bukan UUID -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (format id tidak valid)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tenants/bukan-uuid",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants",
+                    "bukan-uuid"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Tenant - id acak -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tenants/{{uuid_404}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants",
+                    "{{uuid_404}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Rename Tenant - versi basi -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('409 Conflict (version mismatch)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "        pm.expect(body.error).to.include('versi');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Nama Telat\",\n  \"expected_version\": {{err_version}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/tenants/{{tenant_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants",
+                    "{{tenant_id}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Tenants - updated_since invalid -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('400 Bad Request (RFC 3339)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "        pm.expect(body.error).to.include('RFC 3339');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tenants?updated_since=bukan-tanggal",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants"
+                  ],
+                  "query": [
+                    {
+                      "key": "updated_since",
+                      "value": "bukan-tanggal"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Tenant - masih ada Business aktif -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('409 Conflict (masih ada business aktif)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"expected_version\": {{tenant_version}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/tenants/{{tenant_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants",
+                    "{{tenant_id}}"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "8.2 Business",
+          "item": [
+            {
+              "name": "Create Business - nama duplikat di tenant sama -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('409 Conflict (nama business duplikat)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "        pm.expect(body.error).to.include('nama business');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Toko Baju Baru\",\n  \"business_type\": \"retail\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/tenants/{{tenant_id}}/businesses",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants",
+                    "{{tenant_id}}",
+                    "businesses"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Business - tenant tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (tenant tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Business Hantu\",\n  \"business_type\": \"retail\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/tenants/{{uuid_404}}/businesses",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants",
+                    "{{uuid_404}}",
+                    "businesses"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Rename Business - versi basi -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('409 Conflict (version mismatch)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Nama Telat\",\n  \"expected_version\": {{err_version}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Businesses - tenant tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (tenant tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tenants/{{uuid_404}}/businesses",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants",
+                    "{{uuid_404}}",
+                    "businesses"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "8.3 Customer",
+          "item": [
+            {
+              "name": "Create Customer - nama kosong -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('400 Bad Request (nama kosong)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "        pm.expect(body.error).to.include('kosong');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"   \"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/customers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "customers"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Customer - phone invalid -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (phone invalid)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Customer Invalid Phone\",\n  \"phone\": \"abc\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/customers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "customers"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Customer - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Customer Hantu\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/customers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "customers"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Rename Customer - versi basi -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('409 Conflict (version mismatch)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Nama Telat\",\n  \"expected_version\": {{err_version}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/customers/{{customer_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "customers",
+                    "{{customer_id}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Customers - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/customers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "customers"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "8.4 Transaction",
+          "item": [
+            {
+              "name": "Create Transaction - kind kosong -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (kind kosong)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"   \",\n  \"amount\": 10000\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/transactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "transactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Transaction - kind invalid -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (kind invalid)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"sale online!\",\n  \"amount\": 10000\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/transactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "transactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Transaction - amount 0 -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('400 Bad Request (amount harus > 0)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "        pm.expect(body.error).to.include('lebih besar dari nol');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"sale\",\n  \"amount\": 0\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/transactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "transactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Transaction - amount negatif -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (amount negatif)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"sale\",\n  \"amount\": -1\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/transactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "transactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Transaction - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"sale\",\n  \"amount\": 10000\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/transactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "transactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Transaction - versi basi -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('409 Conflict (version mismatch)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"expected_version\": {{err_version}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/transactions/{{transaction_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "{{transaction_id}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Transactions - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/transactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "transactions"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "8.5 Relationship",
+          "item": [
+            {
+              "name": "Create Relationship - self relationship -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('409 Conflict (self relationship)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "        pm.expect(body.error).to.include('dirinya sendiri');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from_customer_id\": \"{{customer_id}}\",\n  \"to_customer_id\": \"{{customer_id}}\",\n  \"relationship_type\": \"sibling\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/relationships",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "relationships"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Relationship - jenis kosong -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (jenis kosong)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from_customer_id\": \"{{customer_id}}\",\n  \"to_customer_id\": \"{{customer_b_id}}\",\n  \"relationship_type\": \"   \"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/relationships",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "relationships"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Relationship - jenis invalid -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (jenis invalid)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from_customer_id\": \"{{customer_id}}\",\n  \"to_customer_id\": \"{{customer_b_id}}\",\n  \"relationship_type\": \"family member!\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/relationships",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "relationships"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Relationship - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from_customer_id\": \"{{customer_id}}\",\n  \"to_customer_id\": \"{{customer_b_id}}\",\n  \"relationship_type\": \"sibling\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/relationships",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "relationships"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Relationships - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/relationships",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "relationships"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "8.6 Interaction",
+          "item": [
+            {
+              "name": "Create Interaction - note kosong -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (note kosong)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"interaction_type\": \"call\",\n  \"note\": \"   \"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/interactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "interactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Interaction - jenis kosong -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (jenis kosong)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"interaction_type\": \"   \"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/interactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "interactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Interaction - jenis invalid -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('400 Bad Request (jenis invalid)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"interaction_type\": \"phone call!\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/interactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "interactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Interaction - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"interaction_type\": \"call\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/interactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "interactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Interactions - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/interactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "interactions"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": " 8.7 Workshop",
+          "item": [
+            {
+              "name": "8.7.1 Create ServiceOrder - deskripsi kosong -> 400",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('400 Bad Request (deskripsi kosong)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(400);",
+                      "        pm.expect(body.error).to.include('kosong');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"description\": \"   \"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/service-orders",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "service-orders"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.2 Create ServiceOrder - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"description\": \"X\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/service-orders",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "service-orders"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.3 Create ServiceOrder (baru, status Received) - untuk tes transisi invalid",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('Create ServiceOrder -> 201 Created', () => {",
+                      "        pm.expect(pm.response.code).to.equal(201);",
+                      "    });",
+                      "    pm.environment.set('service_order_err_id', body.id);",
+                      "    pm.environment.set('service_order_err_version', body.version);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"description\": \"Servis untuk tes transisi invalid\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{business_id}}/service-orders",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{business_id}}",
+                    "service-orders"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.4 Complete ServiceOrder - langsung dari Received (belum Start) -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('409 Conflict (transisi status tidak valid)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "        pm.expect(body.error).to.include('tidak bisa mengubah status');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"expected_version\": {{service_order_err_version}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/service-orders/{{service_order_err_id}}/complete",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{service_order_err_id}}",
+                    "complete"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.5 Start ServiceOrder - versi basi -> 409",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('409 Conflict (version mismatch)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(409);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"expected_version\": {{err_version}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/service-orders/{{service_order_err_id}}/start",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{service_order_err_id}}",
+                    "start"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.6 Setup - Create Tenant Lain (untuk tes cross-business)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.environment.set('other_tenant_id', body.id);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Tenant Bengkel Lain\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/tenants",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.7 Setup - Create Business Lain (untuk tes cross-business)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.environment.set('other_business_id', body.id);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Bengkel Lain\",\n  \"business_type\": \"workshop\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/tenants/{{other_tenant_id}}/businesses",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tenants",
+                    "{{other_tenant_id}}",
+                    "businesses"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.8 Setup - Create Transaction milik Business Lain",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.environment.set('other_transaction_id', body.id);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"service\",\n  \"amount\": 75000\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{other_business_id}}/transactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{other_business_id}}",
+                    "transactions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.9 Complete ServiceOrder - transaction_id milik Business lain -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.test('404 Not Found (transaction bukan milik business ini, info-hiding)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "        pm.expect(body.error).to.include('transaction tidak ditemukan');",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"expected_version\": {{service_order_err_version}},\n  \"transaction_id\": \"{{other_transaction_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/service-orders/{{service_order_err_id}}/complete",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{service_order_err_id}}",
+                    "complete"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "8.7.10 List ServiceOrders - business tidak ada -> 404",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": []
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('afterResponse', function () {",
+                      "    pm.test('404 Not Found (business tidak ada)', () => {",
+                      "        pm.expect(pm.response.code).to.equal(404);",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "protocolProfileBehavior": {
+                "followRedirects": true,
+                "disableUrlEncoding": false,
+                "disableCookies": false
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/businesses/{{uuid_404}}/service-orders",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "businesses",
+                    "{{uuid_404}}",
+                    "service-orders"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "9. Cleanup (Delete semua, urut)",
+      "item": [
+        {
+          "name": "9.1 Delete ServiceOrder (utama)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete ServiceOrder -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{service_order_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/service-orders/{{service_order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{service_order_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.2 Delete ServiceOrder (cancel demo)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete ServiceOrder (cancel demo) -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{service_order_cancel_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/service-orders/{{service_order_cancel_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{service_order_cancel_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.3 Delete Interaction",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete Interaction -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{interaction_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/interactions/{{interaction_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "interactions",
+                "{{interaction_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.4 Delete Relationship",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete Relationship -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{relationship_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/relationships/{{relationship_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relationships",
+                "{{relationship_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.5 Delete Transaction",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete Transaction -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{transaction_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/transactions/{{transaction_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transaction_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.6 Delete Customer B",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete Customer B -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{customer_b_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/customers/{{customer_b_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "customers",
+                "{{customer_b_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.7 Delete Customer",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete Customer -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{customer_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/customers/{{customer_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "customers",
+                "{{customer_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.8 Delete Business",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete Business -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{business_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "businesses",
+                "{{business_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.9 Delete Tenant",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('afterResponse', function () {",
+                  "    pm.test('Delete Tenant -> 204 No Content', () => {",
+                  "        pm.expect(pm.response.code).to.equal(204);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": true,
+            "disableUrlEncoding": false,
+            "disableCookies": false
+          },
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{tenant_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
