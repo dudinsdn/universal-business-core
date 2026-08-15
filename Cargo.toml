@@ -38,3 +38,4 @@ sqlx = { version = "0.8.6", default-features = false, features = [
 ] }
 
 get_if_addrs = "0.5.3"
+thiserror = "2.0.19"
