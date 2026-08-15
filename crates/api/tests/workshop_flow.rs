@@ -487,6 +487,46 @@ async fn list_service_orders_scoped_to_business_and_includes_soft_deleted() {
 }
 
 #[tokio::test]
+async fn list_service_orders_only_returns_changes_after_cursor() {
+    let app = app();
+    let (business_id, customer_id) = setup_business_with_customer(&app).await;
+
+    send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/businesses/{business_id}/service-orders"),
+            json!({ "customer_id": customer_id, "description": "Servis lama" }),
+        ),
+    )
+    .await;
+
+    let cursor_time = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
+    let (_, baru) = send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/businesses/{business_id}/service-orders"),
+            json!({ "customer_id": customer_id, "description": "Servis baru" }),
+        ),
+    )
+    .await;
+
+    let (status, changed) = send(
+        &app,
+        get_request(&format!(
+            "/businesses/{business_id}/service-orders?updated_since={cursor_time}"
+        )),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let changed = changed.as_array().unwrap();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0]["id"], baru["id"]);
+}
+
+#[tokio::test]
 async fn list_service_orders_returns_404_when_business_not_found() {
     let app = app();
     let random_id = domain::BusinessId::new().to_string();

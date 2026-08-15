@@ -346,6 +346,46 @@ async fn list_transactions_scoped_to_business_and_includes_soft_deleted() {
 }
 
 #[tokio::test]
+async fn list_transactions_only_returns_changes_after_cursor() {
+    let app = app();
+    let business_id = setup_business(&app).await;
+
+    send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/businesses/{business_id}/transactions"),
+            json!({ "kind": "sale", "amount": 10000 }),
+        ),
+    )
+    .await;
+
+    let cursor_time = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
+    let (_, baru) = send(
+        &app,
+        json_request(
+            "POST",
+            &format!("/businesses/{business_id}/transactions"),
+            json!({ "kind": "sale", "amount": 20000 }),
+        ),
+    )
+    .await;
+
+    let (status, changed) = send(
+        &app,
+        get_request(&format!(
+            "/businesses/{business_id}/transactions?updated_since={cursor_time}"
+        )),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let changed = changed.as_array().unwrap();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0]["id"], baru["id"]);
+}
+
+#[tokio::test]
 async fn list_transactions_returns_404_when_business_not_found() {
     let app = app();
     let random_id = domain::BusinessId::new().to_string();
