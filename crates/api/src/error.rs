@@ -22,6 +22,12 @@ impl From<ApplicationError> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let message = self.0.to_string();
+        // `error_code` -- identitas stabil bahasa-independen (lihat
+        // `DomainError::code`/`ApplicationError::code`). Dipakai client
+        // (mis. frontend) untuk menerjemahkan pesan ke bahasa lain tanpa
+        // mem-parsing string `error`. `error` tetap dikirim sebagai
+        // fallback Bahasa Indonesia untuk client yang belum menerjemahkan.
+        let code = self.0.code();
 
         let status = match &self.0 {
             ApplicationError::Domain(domain_err) => match domain_err {
@@ -61,7 +67,11 @@ impl IntoResponse for ApiError {
             | ApplicationError::InteractionNotFound => StatusCode::NOT_FOUND,
             ApplicationError::Repository(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (status, Json(json!({ "error": message }))).into_response()
+        (
+            status,
+            Json(json!({ "error_code": code, "error": message })),
+        )
+            .into_response()
     }
 }
 
@@ -77,6 +87,19 @@ mod tests {
         let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         let message = body["error"].as_str().unwrap().to_string();
         (status, message)
+    }
+
+    /// Sama seperti `response_of`, tapi juga mengembalikan `error_code` --
+    /// dipakai test yang secara eksplisit memverifikasi identitas
+    /// bahasa-independen (bukan cuma pesan Bahasa Indonesia-nya).
+    async fn response_of_with_code(err: ApplicationError) -> (StatusCode, String, String) {
+        let response = ApiError::from(err).into_response();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let message = body["error"].as_str().unwrap().to_string();
+        let code = body["error_code"].as_str().unwrap().to_string();
+        (status, message, code)
     }
 
     // --- DomainError -> 400 Bad Request (pelanggaran validasi Value Object) ---
@@ -368,5 +391,34 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert!(msg.contains("koneksi database putus"));
+    }
+
+    // --- error_code -- representatif per kategori, membuktikan field
+    // baru terisi identitas stabil bahasa-independen, bukan diam-diam
+    // kosong atau ikut berubah kalau pesan Bahasa Indonesia diedit.
+
+    #[tokio::test]
+    async fn domain_error_response_includes_error_code() {
+        let (_, _, code) =
+            response_of_with_code(ApplicationError::Domain(DomainError::NameTooLong {
+                max: 255,
+            }))
+            .await;
+        assert_eq!(code, "name_too_long");
+    }
+
+    #[tokio::test]
+    async fn not_found_response_includes_error_code() {
+        let (_, _, code) = response_of_with_code(ApplicationError::CustomerNotFound).await;
+        assert_eq!(code, "customer_not_found");
+    }
+
+    #[tokio::test]
+    async fn repository_error_response_includes_error_code() {
+        let (_, _, code) = response_of_with_code(ApplicationError::Repository(
+            application::RepositoryError::Unavailable("koneksi database putus".to_string()),
+        ))
+        .await;
+        assert_eq!(code, "repository_unavailable");
     }
 }

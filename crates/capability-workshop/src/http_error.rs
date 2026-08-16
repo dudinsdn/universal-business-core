@@ -116,11 +116,20 @@ impl IntoResponse for WorkshopApiError {
     fn into_response(self) -> Response {
         match self {
             WorkshopApiError::Core(err) => {
+                // `error_code` -- identitas stabil bahasa-independen,
+                // diambil SEBELUM `err` dipindah ke `core_error_response`
+                // (lihat catatan `code()` di api::error::ApiError).
+                let code = err.code();
                 let (status, message) = core_error_response(&err);
-                (status, Json(json!({ "error": message }))).into_response()
+                (
+                    status,
+                    Json(json!({ "error_code": code, "error": message })),
+                )
+                    .into_response()
             }
             WorkshopApiError::Workshop(err) => {
                 let message = err.to_string();
+                let code = err.code();
                 let status = match &err {
                     ServiceOrderError::Workshop(workshop_err) => match workshop_err {
                         WorkshopError::EmptyDescription
@@ -145,7 +154,11 @@ impl IntoResponse for WorkshopApiError {
                     ServiceOrderError::ServiceOrderNotFound => StatusCode::NOT_FOUND,
                     ServiceOrderError::Repository(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 };
-                (status, Json(json!({ "error": message }))).into_response()
+                (
+                    status,
+                    Json(json!({ "error_code": code, "error": message })),
+                )
+                    .into_response()
             }
         }
     }
@@ -163,6 +176,19 @@ mod tests {
         let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         let message = body["error"].as_str().unwrap().to_string();
         (status, message)
+    }
+
+    /// Sama seperti `response_of`, tapi juga mengembalikan `error_code` --
+    /// dipakai test yang secara eksplisit memverifikasi identitas
+    /// bahasa-independen (bukan cuma pesan Bahasa Indonesia-nya).
+    async fn response_of_with_code(err: WorkshopApiError) -> (StatusCode, String, String) {
+        let response = err.into_response();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let message = body["error"].as_str().unwrap().to_string();
+        let code = body["error_code"].as_str().unwrap().to_string();
+        (status, message, code)
     }
 
     // --- Core (ApplicationError) — representatif per kategori status.
@@ -325,5 +351,33 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert!(msg.contains("koneksi database putus"));
+    }
+
+    // --- error_code -- representatif Core dan Workshop, membuktikan
+    // field baru terisi identitas stabil, bukan diam-diam kosong.
+
+    #[tokio::test]
+    async fn core_error_response_includes_error_code() {
+        let (_, _, code) = response_of_with_code(WorkshopApiError::Core(ApplicationError::Domain(
+            DomainError::EmptyName,
+        )))
+        .await;
+        assert_eq!(code, "empty_name");
+    }
+
+    #[tokio::test]
+    async fn workshop_error_response_includes_error_code() {
+        let (_, _, code) =
+            response_of_with_code(WorkshopApiError::from(WorkshopError::CustomerNotFound)).await;
+        assert_eq!(code, "customer_not_found");
+    }
+
+    #[tokio::test]
+    async fn service_order_not_found_response_includes_error_code() {
+        let (_, _, code) = response_of_with_code(WorkshopApiError::Workshop(
+            ServiceOrderError::ServiceOrderNotFound,
+        ))
+        .await;
+        assert_eq!(code, "service_order_not_found");
     }
 }
